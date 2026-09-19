@@ -9,13 +9,30 @@ export const Footer: React.FC = () => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
+  const ADMIN_SECRET = '8156958052';
+
+  const checkAdminAccess = (value: string) => {
+    if (value.trim() === ADMIN_SECRET) {
+      setEmail('');
+      showToast('Admin Console unlocked', 'success');
+      setCurrentView('admin');
+      return true;
+    }
+    return false;
+  };
+
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) {
-      setSubscribed(true);
-      showToast('Thank you for subscribing to Xylem Learning updates!');
-      setEmail('');
+    const val = email.trim();
+    if (!val) return;
+
+    if (checkAdminAccess(val)) {
+      return;
     }
+
+    setSubscribed(true);
+    showToast('Thank you for subscribing to Xylem Learning updates!');
+    setEmail('');
   };
 
   return (
@@ -176,17 +193,24 @@ export const Footer: React.FC = () => {
             ) : (
               <form onSubmit={handleSubscribe} className="flex items-center">
                 <input
-                  type="email"
+                  type="text"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEmail(val);
+                    if (val.trim() === ADMIN_SECRET) {
+                      checkAdminAccess(val);
+                    }
+                  }}
                   placeholder="Enter your email address"
                   required
+                  autoComplete="off"
                   className="w-full text-xs px-3 py-2 bg-slate-900 border border-slate-700 rounded-l-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-emerald-500"
                 />
                 <button
                   type="submit"
                   aria-label="Subscribe"
-                  className="bg-[#00875a] hover:bg-[#00734c] text-white px-3 py-2 rounded-r-lg transition-colors"
+                  className="bg-[#00875a] hover:bg-[#00734c] text-white px-3 py-2 rounded-r-lg transition-colors cursor-pointer"
                 >
                   <ArrowRight className="w-4 h-4" />
                 </button>

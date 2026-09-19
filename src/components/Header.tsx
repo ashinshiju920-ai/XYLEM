@@ -56,12 +56,6 @@ export const Header: React.FC = () => {
       action: () => setCurrentView('about'),
       isActive: currentView === 'about',
     },
-    {
-      label: 'Admin',
-      action: () => setCurrentView('admin'),
-      isActive: currentView === 'admin',
-      isSpecial: true,
-    },
   ];
 
   return (
@@ -168,17 +162,6 @@ export const Header: React.FC = () => {
                     >
                       <Heart className="w-4 h-4 text-rose-500" />
                       Saved to Wishlist ({wishlist.length})
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setCurrentView('admin');
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100/60 font-semibold flex items-center gap-2"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Admin Publisher Portal
                     </button>
 
                     <div className="border-t border-slate-100 my-1" />
