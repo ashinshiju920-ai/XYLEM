@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
+import { HeroBookShowcase } from '../components/HeroBookShowcase';
 import { ExamCategory, Book } from '../types';
 
 export const HomeView: React.FC = () => {
@@ -149,58 +150,9 @@ export const HomeView: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Hero Visual (The Stack of Books from Image 5 & 3) */}
+            {/* Right Hero Visual (New 3D Animated Showcase from User Reference) */}
             <div className="lg:col-span-6 relative flex items-center justify-center">
-              <div className="relative w-full max-w-lg bg-gradient-to-tr from-slate-100 to-emerald-50/50 rounded-3xl p-6 sm:p-10 border border-slate-200/70 shadow-xl overflow-hidden">
-                {/* Visual quote stamp */}
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-full border border-emerald-200 text-[11px] font-bold text-emerald-800 shadow-xs flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Better Materials. Brighter Future.
-                </div>
-
-                {/* Horizontal / Tilted showcase of books */}
-                <div className="flex items-end justify-center gap-2 sm:gap-4 pt-6 pb-2">
-                  <div
-                    onClick={() => navigateToProduct(books[0]?.id || 'ielts-full-prep')}
-                    className="transform -rotate-6 hover:rotate-0 hover:-translate-y-2 transition-all duration-300 cursor-pointer"
-                  >
-                    <BookCover book={books[0]} size="md" />
-                  </div>
-                  <div
-                    onClick={() => navigateToProduct(books[1]?.id || books[0]?.id || 'oet-full-prep')}
-                    className="transform -rotate-2 hover:rotate-0 hover:-translate-y-2 transition-all duration-300 cursor-pointer"
-                  >
-                    <BookCover book={books[1] || books[0]} size="md" />
-                  </div>
-                  <div
-                    onClick={() => navigateToProduct(books[2]?.id || books[0]?.id || 'german-full-prep')}
-                    className="transform rotate-3 hover:rotate-0 hover:-translate-y-2 transition-all duration-300 cursor-pointer"
-                  >
-                    <BookCover book={books[2] || books[0]} size="md" />
-                  </div>
-                  <div
-                    onClick={() => navigateToProduct(books[3]?.id || books[0]?.id || 'pte-full-prep')}
-                    className="transform rotate-8 hover:rotate-0 hover:-translate-y-2 transition-all duration-300 cursor-pointer hidden sm:block"
-                  >
-                    <BookCover book={books[3] || books[0]} size="md" />
-                  </div>
-                </div>
-
-                {/* Desk reflection base */}
-                <div className="mt-4 pt-4 border-t border-slate-300/60 flex items-center justify-between text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">Instant PDF Download</span>
-                    <span className="text-slate-400">•</span>
-                    <span>Optional Printed Book</span>
-                  </div>
-                  <button
-                    onClick={() => navigateToCatalog('All')}
-                    className="text-emerald-700 font-bold hover:underline flex items-center gap-1"
-                  >
-                    View All Guides <ChevronRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
+              <HeroBookShowcase />
             </div>
           </div>
         </div>
