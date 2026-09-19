@@ -25,6 +25,7 @@ import {
   Youtube,
   Facebook,
   Linkedin,
+  Users,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
@@ -1083,12 +1084,18 @@ export const CheckoutView: React.FC = () => {
                     {activeBook.title}
                   </h4>
 
-                  <div className="flex items-center gap-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
                     <div className="flex text-amber-400">
                       <Star className="w-3.5 h-3.5 fill-amber-400" />
                     </div>
                     <span className="font-bold text-slate-800">{activeBook.rating}</span>
                     <span className="text-slate-400">({activeBook.reviewCount} reviews)</span>
+                    {activeBook.buyersCount !== undefined && activeBook.buyersCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <Users className="w-3 h-3 text-emerald-600" />
+                        <span>{activeBook.buyersCount.toLocaleString()} bought</span>
+                      </span>
+                    )}
                   </div>
 
                   <ul className="space-y-1 text-[11px] text-slate-600 pt-1">

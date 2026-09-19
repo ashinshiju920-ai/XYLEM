@@ -14,6 +14,7 @@ export interface Book {
   isNew?: boolean;
   rating: number;
   reviewCount: number;
+  buyersCount?: number;
   description: string;
   longDescription: string;
   features: string[];

@@ -15,6 +15,7 @@ import {
   DownloadCloud,
   ExternalLink,
   Plus,
+  Users,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
@@ -226,8 +227,8 @@ export const ProductDetailView: React.FC = () => {
               {book.title}
             </h1>
 
-            {/* Star Rating */}
-            <div className="flex items-center gap-3 mt-2">
+            {/* Star Rating & Social Proof */}
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <div className="flex items-center text-amber-400">
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="w-4 h-4 fill-amber-400" />
@@ -235,6 +236,15 @@ export const ProductDetailView: React.FC = () => {
               </div>
               <span className="text-sm font-bold text-slate-800">{book.rating}</span>
               <span className="text-xs text-slate-500">({book.reviewCount} reviews)</span>
+              {book.buyersCount !== undefined && book.buyersCount > 0 && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
+                    <Users className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{book.buyersCount.toLocaleString()} students bought this</span>
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -572,6 +582,11 @@ export const ProductDetailView: React.FC = () => {
                   <div className="border-l border-slate-200 pl-6 space-y-1 text-xs text-slate-600">
                     <div>✓ 98% of learners would recommend this guide</div>
                     <div>✓ Verified by Cambridge & British Council test patterns</div>
+                    {book.buyersCount !== undefined && book.buyersCount > 0 && (
+                      <div className="font-semibold text-emerald-700">
+                        ✓ {book.buyersCount.toLocaleString()}+ students already purchased this book
+                      </div>
+                    )}
                   </div>
                 </div>
 

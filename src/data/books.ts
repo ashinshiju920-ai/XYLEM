@@ -10,6 +10,7 @@ export const BOOKS: Book[] = [
     isBestSeller: true,
     rating: 4.8,
     reviewCount: 124,
+    buyersCount: 1420,
     description:
       'Complete study guide for IELTS with 500+ practice questions and full-length mock tests. Build your skills, improve your score and achieve your dream band.',
     longDescription:

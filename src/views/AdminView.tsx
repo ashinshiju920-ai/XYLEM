@@ -33,6 +33,8 @@ import {
   ArrowDown,
   ChevronsUp,
   ArrowUpDown,
+  Users,
+  MessageSquare,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review } from '../types';
@@ -84,6 +86,7 @@ export const AdminView: React.FC = () => {
     isNew: true,
     rating: 5.0,
     reviewCount: 1,
+    buyersCount: 0,
     description: '',
     longDescription: '',
     features: ['Official Exam Syllabus 2026', 'Step-by-Step Solved Questions', 'Examiner Tips & High-Band Vocabulary'],
@@ -130,6 +133,13 @@ export const AdminView: React.FC = () => {
   const bookImageInputRef = useRef<HTMLInputElement>(null);
   const slotFileInputRef = useRef<HTMLInputElement>(null);
   const [targetSlotToUpload, setTargetSlotToUpload] = useState<number>(0);
+
+  // Product Modal Inline Review Creator State
+  const [modalReviewAuthor, setModalReviewAuthor] = useState('');
+  const [modalReviewRating, setModalReviewRating] = useState<number>(5);
+  const [modalReviewBand, setModalReviewBand] = useState('Band 8.0 Achieved');
+  const [modalReviewComment, setModalReviewComment] = useState('');
+  const [modalReviewVerified, setModalReviewVerified] = useState(true);
 
   // PDF Manager State
   const [selectedBookForPdf, setSelectedBookForPdf] = useState<string>(books[0]?.id || '');
@@ -194,8 +204,9 @@ export const AdminView: React.FC = () => {
       type: book.type,
       isBestSeller: book.isBestSeller ?? false,
       isNew: book.isNew ?? false,
-      rating: book.rating,
-      reviewCount: book.reviewCount,
+      rating: book.rating ?? 5.0,
+      reviewCount: book.reviewCount ?? 1,
+      buyersCount: book.buyersCount ?? 0,
       description: book.description,
       longDescription: book.longDescription,
       features: [...book.features],
@@ -218,6 +229,11 @@ export const AdminView: React.FC = () => {
     });
     setProductSkuInput(book.id || 'PROD-1029');
     setUploadStatus({ type: 'idle', message: '' });
+    setModalReviewAuthor('');
+    setModalReviewComment('');
+    setModalReviewRating(5);
+    setModalReviewBand('Band 8.0 Achieved');
+    setModalReviewVerified(true);
     setIsProductModalOpen(true);
   };
 
@@ -229,7 +245,13 @@ export const AdminView: React.FC = () => {
     setBookFormData({
       ...initialBookForm,
       images: [],
+      reviews: [],
     });
+    setModalReviewAuthor('');
+    setModalReviewComment('');
+    setModalReviewRating(5);
+    setModalReviewBand('Band 8.0 Achieved');
+    setModalReviewVerified(true);
     setIsProductModalOpen(true);
   };
 
@@ -340,6 +362,44 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  // Product Modal Inline Review Creator Actions
+  const handleAddReviewToProductForm = () => {
+    if (!modalReviewAuthor.trim() || !modalReviewComment.trim()) {
+      showToast('Please enter reviewer name and comment', 'warning');
+      return;
+    }
+
+    const newReview: Review = {
+      id: `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      author: modalReviewAuthor.trim(),
+      rating: modalReviewRating,
+      bandOrScore: modalReviewBand.trim() || undefined,
+      comment: modalReviewComment.trim(),
+      verified: modalReviewVerified,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+
+    const nextReviews = [newReview, ...(bookFormData.reviews || [])];
+    setBookFormData((prev) => ({
+      ...prev,
+      reviews: nextReviews,
+      reviewCount: Math.max(prev.reviewCount || 0, nextReviews.length),
+    }));
+
+    setModalReviewAuthor('');
+    setModalReviewComment('');
+    showToast(`Review from "${newReview.author}" attached!`, 'success');
+  };
+
+  const handleRemoveReviewFromProductForm = (reviewId: string) => {
+    const nextReviews = (bookFormData.reviews || []).filter((r) => r.id !== reviewId);
+    setBookFormData((prev) => ({
+      ...prev,
+      reviews: nextReviews,
+    }));
+    showToast('Review removed from product', 'info');
+  };
+
   // Save Book Form (Create or Update)
   const handleSaveBook = (e: React.FormEvent) => {
     e.preventDefault();
@@ -353,22 +413,23 @@ export const AdminView: React.FC = () => {
       : (bookFormData.imageUrl ? [bookFormData.imageUrl] : []);
     const finalCover = finalImages[0] || bookFormData.imageUrl || '';
 
-    const payload = {
+    const payload: Book = {
       ...bookFormData,
+      rating: typeof bookFormData.rating === 'number' ? bookFormData.rating : (parseFloat(bookFormData.rating as any) || 5.0),
+      reviewCount: typeof bookFormData.reviewCount === 'number' ? bookFormData.reviewCount : (parseInt(bookFormData.reviewCount as any, 10) || 0),
+      buyersCount: typeof bookFormData.buyersCount === 'number' ? bookFormData.buyersCount : (parseInt(bookFormData.buyersCount as any, 10) || 0),
+      reviews: bookFormData.reviews ? [...bookFormData.reviews] : [],
       images: finalImages,
       imageUrl: finalCover,
+      id: editingBookId || `book-${Date.now()}`,
     };
 
     if (editingBookId) {
       updateBook(editingBookId, payload);
       showToast(`Updated "${bookFormData.title}" successfully!`, 'success');
     } else {
-      const newBook: Book = {
-        ...payload,
-        id: `book-${Date.now()}`,
-      };
-      addBook(newBook);
-      showToast(`Added "${newBook.title}" to catalog!`, 'success');
+      addBook(payload);
+      showToast(`Added "${payload.title}" to catalog!`, 'success');
     }
 
     setIsProductModalOpen(false);
@@ -2178,10 +2239,291 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
 
+              {/* SECTION 3: RATINGS, REVIEWS & NUMBER OF BUYERS SOCIAL PROOF */}
+              <div className="space-y-4 p-5 rounded-2xl bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-slate-50 border border-amber-200/80 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/70 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center border border-amber-300">
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] text-[#0a2540] flex items-center gap-2">
+                        <span>3. Ratings, Review Count &amp; Buyers Social Proof</span>
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                          Storefront Visible
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Configure manual star ratings, review counts, number of students who bought this book, and attach customer reviews.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-700 bg-white px-3 py-1 rounded-full border border-amber-200 shadow-2xs flex items-center gap-1.5">
+                      <div className="flex text-amber-400">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${
+                              i < Math.round(bookFormData.rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-slate-900 font-black">{bookFormData.rating || 5.0}</span>
+                      <span className="text-slate-400 font-normal">({bookFormData.reviewCount || 0} reviews)</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3 Numerical Controls: Star Rating, Total Reviews, Number of Buyers */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Control 1: Star Rating */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                        <span>Star Rating (1.0 - 5.0)</span>
+                      </span>
+                      <span className="text-xs font-black text-amber-600 font-mono">
+                        {bookFormData.rating || 5.0} ★
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1.0"
+                      max="5.0"
+                      value={bookFormData.rating ?? 5.0}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setBookFormData({ ...bookFormData, rating: isNaN(val) ? 5.0 : val });
+                      }}
+                      className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Displayed on product badges and detail header.
+                    </p>
+                  </div>
+
+                  {/* Control 2: Total Review Count */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Review Count</span>
+                      </span>
+                      <span className="text-xs font-bold text-blue-600 font-mono">
+                        {bookFormData.reviewCount || 0} reviews
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bookFormData.reviewCount ?? 1}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setBookFormData({ ...bookFormData, reviewCount: isNaN(val) ? 0 : val });
+                      }}
+                      className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-400"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Shown directly as &ldquo;({bookFormData.reviewCount || 0} reviews)&rdquo;.
+                    </p>
+                  </div>
+
+                  {/* Control 3: Number of People Who Bought It */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>People Who Bought It</span>
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600 font-mono">
+                        {(bookFormData.buyersCount || 0).toLocaleString()}+
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 1450"
+                      value={bookFormData.buyersCount ?? 0}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setBookFormData({ ...bookFormData, buyersCount: isNaN(val) ? 0 : val });
+                      }}
+                      className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Displays as &ldquo;{(bookFormData.buyersCount || 0).toLocaleString()}+ students bought this&rdquo;.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Inline Review Creator for this Product */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-bold text-[#0a2540] flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Add Verified Customer Reviews for this Product</span>
+                    </h5>
+                    <span className="text-[10px] font-semibold text-slate-500">
+                      {bookFormData.reviews?.length || 0} reviews attached
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600">Reviewer Full Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Ananya Nair"
+                        value={modalReviewAuthor}
+                        onChange={(e) => setModalReviewAuthor(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600">Exam Band / Score</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Band 8.5 Achieved"
+                        value={modalReviewBand}
+                        onChange={(e) => setModalReviewBand(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600">Rating (1 to 5)</label>
+                      <div className="flex items-center gap-1 mt-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            type="button"
+                            key={star}
+                            onClick={() => setModalReviewRating(star)}
+                            className="p-0.5 text-amber-400 hover:scale-110 transition-transform"
+                          >
+                            <Star
+                              className={`w-4 h-4 ${
+                                star <= modalReviewRating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                        <span className="text-[11px] font-bold text-slate-700 ml-1.5">
+                          {modalReviewRating}.0
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600">Customer Comment / Review</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Write customer review text (e.g. Excellent practice tests and high-yield vocabulary!)..."
+                      value={modalReviewComment}
+                      onChange={(e) => setModalReviewComment(e.target.value)}
+                      className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={modalReviewVerified}
+                        onChange={(e) => setModalReviewVerified(e.target.checked)}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>Mark as Verified Purchase</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleAddReviewToProductForm}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Attach Review</span>
+                    </button>
+                  </div>
+
+                  {/* Attached Reviews List in Modal */}
+                  {bookFormData.reviews && bookFormData.reviews.length > 0 && (
+                    <div className="mt-3 space-y-2 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Attached Reviews ({bookFormData.reviews.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookFormData((prev) => ({
+                              ...prev,
+                              reviewCount: prev.reviews?.length || 1,
+                            }));
+                            showToast('Review count synced to attached reviews!', 'info');
+                          }}
+                          className="text-[10px] font-bold text-emerald-700 hover:underline"
+                        >
+                          Sync count to {bookFormData.reviews.length} reviews
+                        </button>
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                        {bookFormData.reviews.map((rev) => (
+                          <div
+                            key={rev.id}
+                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-slate-900">{rev.author}</span>
+                                {rev.bandOrScore && (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[9px] font-bold">
+                                    {rev.bandOrScore}
+                                  </span>
+                                )}
+                                <div className="flex text-amber-400">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`w-3 h-3 ${
+                                        i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-[10px] text-slate-400">{rev.date}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">
+                                &ldquo;{rev.comment}&rdquo;
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveReviewFromProductForm(rev.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors shrink-0"
+                              title="Delete review"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Pricing Grid */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
-                  2. Pricing & Formats
+                  4. Pricing &amp; Formats
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Digital Pricing */}

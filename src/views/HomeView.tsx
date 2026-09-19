@@ -303,10 +303,15 @@ export const HomeView: React.FC = () => {
 
                 {/* Rating & Review */}
                 <div className="w-full flex items-center justify-between mt-1 text-[11px] sm:text-xs">
-                  <div className="flex items-center text-amber-500 font-semibold">
-                    <Star className="w-3 h-3 fill-amber-400 mr-1" />
-                    <span>{book.rating}</span>
-                    <span className="text-slate-400 font-normal ml-0.5">({book.reviewCount})</span>
+                  <div className="flex items-center text-amber-500 font-semibold gap-1">
+                    <div className="flex items-center">
+                      <Star className="w-3 h-3 fill-amber-400 mr-1" />
+                      <span>{book.rating}</span>
+                      <span className="text-slate-400 font-normal ml-0.5">({book.reviewCount})</span>
+                    </div>
+                    {book.buyersCount !== undefined && book.buyersCount > 0 && (
+                      <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">• {book.buyersCount.toLocaleString()} bought</span>
+                    )}
                   </div>
                   {book.isBestSeller && (
                     <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
