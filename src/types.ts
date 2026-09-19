@@ -4,6 +4,16 @@ export type BookFormat = 'digital' | 'physical';
 
 export type ViewType = 'home' | 'catalog' | 'product' | 'cart' | 'checkout' | 'order-success' | 'orders' | 'about' | 'admin';
 
+export interface ProductAddon {
+  id: string;
+  name: string;
+  subtitle?: string;
+  price: number;
+  originalPrice: number;
+  discountPercent?: number;
+  deliveryOption?: 'digital' | 'physical';
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -48,6 +58,9 @@ export interface Book {
   adText?: string;
   reviews?: Review[];
   totalPages?: number;
+  addons?: ProductAddon[];
+  buy2Get3rdFree?: boolean;
+  addonDealText?: string;
 }
 
 export interface CartItem {
@@ -56,6 +69,10 @@ export interface CartItem {
   format: BookFormat;
   quantity: number;
   price: number;
+  selectedAddonIds?: string[];
+  selectedAddons?: ProductAddon[];
+  originalPrice?: number;
+  freeAddonDiscount?: number;
 }
 
 export interface ShippingInfo {

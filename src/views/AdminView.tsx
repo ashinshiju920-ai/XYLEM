@@ -37,9 +37,10 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath } from '../types';
+import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath, ProductAddon } from '../types';
 import { BookCover } from '../components/BookCover';
 import { uploadImageToCloudinary } from '../utils/cloudSync';
+import { getBookAddons } from '../utils/pricing';
 
 const EXAM_IMAGE_PRESETS: { [key in ExamCategory]?: { label: string; url: string }[] } = {
   IELTS: [
@@ -152,6 +153,28 @@ export const AdminView: React.FC = () => {
     adText: 'Buy on Amazon / Partner Site',
     totalPages: 240,
     reviews: [],
+    addons: [
+      {
+        id: 'addon_1',
+        name: 'Digital (PDF)',
+        subtitle: 'Instant Download',
+        price: 499,
+        originalPrice: 999,
+        discountPercent: 50,
+        deliveryOption: 'digital',
+      },
+      {
+        id: 'addon_2',
+        name: 'Physical (Printed)',
+        subtitle: 'Delivered in 3-5 days',
+        price: 899,
+        originalPrice: 1499,
+        discountPercent: 40,
+        deliveryOption: 'physical',
+      },
+    ],
+    buy2Get3rdFree: false,
+    addonDealText: 'Special Deal: Buy Any 2 Add-ons, Get the 3rd FREE!',
   };
 
   const [bookFormData, setBookFormData] = useState<Omit<Book, 'id'>>(initialBookForm);
@@ -263,6 +286,9 @@ export const AdminView: React.FC = () => {
       totalPages: book.totalPages || 200,
       reviews: book.reviews ? [...book.reviews] : [],
       order: book.order,
+      addons: book.addons && book.addons.length > 0 ? [...book.addons] : getBookAddons(book),
+      buy2Get3rdFree: book.buy2Get3rdFree ?? false,
+      addonDealText: book.addonDealText || 'Special Deal: Buy Any 2 Add-ons, Get the 3rd FREE!',
     });
     setProductSkuInput(book.id || 'PROD-1029');
     setUploadStatus({ type: 'idle', message: '' });
@@ -283,6 +309,28 @@ export const AdminView: React.FC = () => {
       ...initialBookForm,
       images: [],
       reviews: [],
+      addons: [
+        {
+          id: 'addon_1',
+          name: 'Digital (PDF)',
+          subtitle: 'Instant Download',
+          price: 499,
+          originalPrice: 999,
+          discountPercent: 50,
+          deliveryOption: 'digital',
+        },
+        {
+          id: 'addon_2',
+          name: 'Physical (Printed)',
+          subtitle: 'Delivered in 3-5 days',
+          price: 899,
+          originalPrice: 1499,
+          discountPercent: 40,
+          deliveryOption: 'physical',
+        },
+      ],
+      buy2Get3rdFree: false,
+      addonDealText: 'Special Deal: Buy Any 2 Add-ons, Get the 3rd FREE!',
     });
     setModalReviewAuthor('');
     setModalReviewComment('');
@@ -450,8 +498,44 @@ export const AdminView: React.FC = () => {
       : (bookFormData.imageUrl ? [bookFormData.imageUrl] : []);
     const finalCover = finalImages[0] || bookFormData.imageUrl || '';
 
+    // Sanitize and ensure up to 4 custom add-ons
+    const sanitizedAddons: ProductAddon[] = (bookFormData.addons && bookFormData.addons.length > 0)
+      ? bookFormData.addons.slice(0, 4).map((a, idx) => {
+          const p = Number(a.price) || 0;
+          const orig = Number(a.originalPrice) || p;
+          const disc = orig > 0 ? Math.round(((orig - p) / orig) * 100) : 0;
+          return {
+            id: a.id || `addon_${idx + 1}`,
+            name: a.name.trim() || `Option ${idx + 1}`,
+            subtitle: a.subtitle ? a.subtitle.trim() : '',
+            price: p,
+            originalPrice: orig,
+            discountPercent: disc >= 0 ? disc : 0,
+            deliveryOption: a.deliveryOption || (idx === 1 ? 'physical' : 'digital'),
+          };
+        })
+      : getBookAddons(bookFormData as any);
+
+    const digitalAddon = sanitizedAddons.find((a) => a.deliveryOption === 'digital') || sanitizedAddons[0];
+    const physicalAddon = sanitizedAddons.find((a) => a.deliveryOption === 'physical') || sanitizedAddons[1] || sanitizedAddons[0];
+
     const payload: Book = {
       ...bookFormData,
+      addons: sanitizedAddons,
+      buy2Get3rdFree: !!bookFormData.buy2Get3rdFree,
+      addonDealText: bookFormData.addonDealText?.trim() || 'Special Deal: Buy Any 2 Add-ons, Get the 3rd FREE!',
+      prices: {
+        digital: {
+          price: digitalAddon.price,
+          originalPrice: digitalAddon.originalPrice,
+          discountPercent: digitalAddon.discountPercent || 50,
+        },
+        physical: {
+          price: physicalAddon.price,
+          originalPrice: physicalAddon.originalPrice,
+          discountPercent: physicalAddon.discountPercent || 40,
+        },
+      },
       rating: typeof bookFormData.rating === 'number' ? bookFormData.rating : (parseFloat(bookFormData.rating as any) || 5.0),
       reviewCount: typeof bookFormData.reviewCount === 'number' ? bookFormData.reviewCount : (parseInt(bookFormData.reviewCount as any, 10) || 0),
       buyersCount: typeof bookFormData.buyersCount === 'number' ? bookFormData.buyersCount : (parseInt(bookFormData.buyersCount as any, 10) || 0),
@@ -3754,111 +3838,229 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Pricing Grid */}
+              {/* Section 4: Customizable Formats & Add-ons (Up to 4) */}
               <div className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
-                  4. Pricing &amp; Formats
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Digital Pricing */}
-                  <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 space-y-3">
-                    <h5 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
-                      <DownloadCloud className="w-4 h-4 text-blue-600" />
-                      Digital (PDF) Pricing
-                    </h5>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600">Sale Price (₹)</label>
-                        <input
-                          type="number"
-                          value={bookFormData.prices.digital.price}
-                          onChange={(e) => {
-                            const p = Number(e.target.value);
-                            const orig = bookFormData.prices.digital.originalPrice || p;
-                            const disc = Math.round(((orig - p) / orig) * 100);
-                            setBookFormData({
-                              ...bookFormData,
-                              prices: {
-                                ...bookFormData.prices,
-                                digital: { price: p, originalPrice: orig, discountPercent: disc },
-                              },
-                            });
-                          }}
-                          className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600">Original (₹)</label>
-                        <input
-                          type="number"
-                          value={bookFormData.prices.digital.originalPrice}
-                          onChange={(e) => {
-                            const orig = Number(e.target.value);
-                            const p = bookFormData.prices.digital.price;
-                            const disc = Math.round(((orig - p) / orig) * 100);
-                            setBookFormData({
-                              ...bookFormData,
-                              prices: {
-                                ...bookFormData.prices,
-                                digital: { price: p, originalPrice: orig, discountPercent: disc },
-                              },
-                            });
-                          }}
-                          className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
-                        />
-                      </div>
-                    </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-emerald-600" />
+                      <span>4. Customizable Formats &amp; Add-ons (Up to 4)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Create up to 4 custom options (e.g. Digital PDF, Physical Book, Audio Test Pack, Mock Exam). Set custom name, offer price, and real rate.
+                    </p>
                   </div>
 
-                  {/* Physical Pricing */}
-                  <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 space-y-3">
-                    <h5 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                      <BookOpen className="w-4 h-4 text-amber-600" />
-                      Physical (Printed) Pricing
-                    </h5>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600">Sale Price (₹)</label>
-                        <input
-                          type="number"
-                          value={bookFormData.prices.physical.price}
-                          onChange={(e) => {
-                            const p = Number(e.target.value);
-                            const orig = bookFormData.prices.physical.originalPrice || p;
-                            const disc = Math.round(((orig - p) / orig) * 100);
-                            setBookFormData({
-                              ...bookFormData,
-                              prices: {
-                                ...bookFormData.prices,
-                                physical: { price: p, originalPrice: orig, discountPercent: disc },
-                              },
-                            });
-                          }}
-                          className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
-                        />
+                  <button
+                    type="button"
+                    disabled={(bookFormData.addons?.length || 0) >= 4}
+                    onClick={() => {
+                      const current = bookFormData.addons ? [...bookFormData.addons] : [];
+                      if (current.length >= 4) return;
+                      const newIdx = current.length + 1;
+                      current.push({
+                        id: `addon_${Date.now()}_${newIdx}`,
+                        name: `Add-on Option ${newIdx}`,
+                        subtitle: 'Additional study package',
+                        price: 399,
+                        originalPrice: 799,
+                        discountPercent: 50,
+                        deliveryOption: 'digital',
+                      });
+                      setBookFormData({ ...bookFormData, addons: current });
+                      showToast(`Added option #${newIdx}! You can have up to 4.`, 'info');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none self-start sm:self-auto cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Add-on ({(bookFormData.addons?.length || 0)}/4)</span>
+                  </button>
+                </div>
+
+                {/* List of Add-ons */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(bookFormData.addons || []).map((addon, index) => {
+                    const orig = Number(addon.originalPrice) || Number(addon.price) || 0;
+                    const pr = Number(addon.price) || 0;
+                    const disc = orig > 0 ? Math.round(((orig - pr) / orig) * 100) : 0;
+
+                    return (
+                      <div
+                        key={addon.id || index}
+                        className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 space-y-3 relative shadow-2xs transition-colors"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-[#0a2540] text-white font-black text-[11px] flex items-center justify-center">
+                              #{index + 1}
+                            </span>
+                            <span className="text-xs font-bold text-slate-800">
+                              Option #{index + 1}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {disc > 0 ? `${disc}% OFF` : 'No discount'}
+                            </span>
+                          </div>
+
+                          {(bookFormData.addons?.length || 0) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = (bookFormData.addons || []).filter((_, i) => i !== index);
+                                setBookFormData({ ...bookFormData, addons: next });
+                                showToast(`Removed Option #${index + 1}`, 'info');
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Delete this add-on option"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                              Option Name
+                            </label>
+                            <input
+                              type="text"
+                              value={addon.name}
+                              placeholder="e.g. Digital (PDF) or Audio Pack"
+                              onChange={(e) => {
+                                const next = [...(bookFormData.addons || [])];
+                                next[index] = { ...next[index], name: e.target.value };
+                                setBookFormData({ ...bookFormData, addons: next });
+                              }}
+                              className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white font-semibold focus:ring-2 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                              Subtitle / Delivery Note
+                            </label>
+                            <input
+                              type="text"
+                              value={addon.subtitle || ''}
+                              placeholder="e.g. Instant Download or Delivered in 3-5 days"
+                              onChange={(e) => {
+                                const next = [...(bookFormData.addons || [])];
+                                next[index] = { ...next[index], subtitle: e.target.value };
+                                setBookFormData({ ...bookFormData, addons: next });
+                              }}
+                              className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-600"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                                Offer Price (₹)
+                              </label>
+                              <input
+                                type="number"
+                                value={addon.price}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  const next = [...(bookFormData.addons || [])];
+                                  next[index] = { ...next[index], price: val };
+                                  setBookFormData({ ...bookFormData, addons: next });
+                                }}
+                                className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 bg-white font-bold text-emerald-800"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                                Real Rate / MRP (₹)
+                              </label>
+                              <input
+                                type="number"
+                                value={addon.originalPrice}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  const next = [...(bookFormData.addons || [])];
+                                  next[index] = { ...next[index], originalPrice: val };
+                                  setBookFormData({ ...bookFormData, addons: next });
+                                }}
+                                className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-600"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                              Fulfillment Type
+                            </label>
+                            <select
+                              value={addon.deliveryOption || 'digital'}
+                              onChange={(e) => {
+                                const next = [...(bookFormData.addons || [])];
+                                next[index] = {
+                                  ...next[index],
+                                  deliveryOption: e.target.value as 'digital' | 'physical',
+                                };
+                                setBookFormData({ ...bookFormData, addons: next });
+                              }}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-800 font-medium cursor-pointer"
+                            >
+                              <option value="digital">Digital (Instant Download PDF / Audio)</option>
+                              <option value="physical">Physical (Shipped Parcel / Printed Book)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Promotional Deal: "Buy 2 Add-ons, Get 3rd FREE" */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-slate-50 border border-emerald-300/80 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                        <Tag className="w-4 h-4" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-600">Original (₹)</label>
-                        <input
-                          type="number"
-                          value={bookFormData.prices.physical.originalPrice}
-                          onChange={(e) => {
-                            const orig = Number(e.target.value);
-                            const p = bookFormData.prices.physical.price;
-                            const disc = Math.round(((orig - p) / orig) * 100);
-                            setBookFormData({
-                              ...bookFormData,
-                              prices: {
-                                ...bookFormData.prices,
-                                physical: { price: p, originalPrice: orig, discountPercent: disc },
-                              },
-                            });
-                          }}
-                          className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
-                        />
+                        <h5 className="text-xs font-black text-emerald-950 font-['Plus_Jakarta_Sans',sans-serif]">
+                          Special Promotion: Buy 2 Add-ons, Get 3rd FREE!
+                        </h5>
+                        <p className="text-[11px] text-emerald-800/90 mt-0.5 leading-relaxed">
+                          When enabled, if a customer selects 3 or more add-ons on the product page, the 3rd add-on is automatically <strong>100% FREE (₹0)</strong> in checkout.
+                        </p>
                       </div>
                     </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                      <input
+                        type="checkbox"
+                        checked={!!bookFormData.buy2Get3rdFree}
+                        onChange={(e) =>
+                          setBookFormData({ ...bookFormData, buy2Get3rdFree: e.target.checked })
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
                   </div>
+
+                  {bookFormData.buy2Get3rdFree && (
+                    <div className="pt-2 border-t border-emerald-200/60">
+                      <label className="text-[10px] font-bold text-emerald-900 block mb-1">
+                        Promotional Headline on Product Page
+                      </label>
+                      <input
+                        type="text"
+                        value={bookFormData.addonDealText || ''}
+                        onChange={(e) =>
+                          setBookFormData({ ...bookFormData, addonDealText: e.target.value })
+                        }
+                        placeholder="e.g. Special Deal: Buy Any 2 Add-ons, Get the 3rd FREE!"
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-emerald-300 bg-white font-medium text-emerald-900"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

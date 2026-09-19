@@ -9,6 +9,7 @@ import {
   checkCatalogVersion,
   subscribeToRealtimeBroadcast,
 } from '../utils/cloudSync';
+import { getBookAddons, calculateAddonsPricing } from '../utils/pricing';
 
 interface Toast {
   id: string;
@@ -58,10 +59,10 @@ interface ShopContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (book: Book, format: BookFormat, quantity?: number) => void;
-  buyNow: (book: Book, format?: BookFormat, quantity?: number) => void;
-  updateCartQty: (bookId: string, format: BookFormat, delta: number) => void;
-  removeFromCart: (bookId: string, format: BookFormat) => void;
+  addToCart: (book: Book, format?: BookFormat, quantity?: number, selectedAddonIds?: string[]) => void;
+  buyNow: (book: Book, format?: BookFormat, quantity?: number, selectedAddonIds?: string[]) => void;
+  updateCartQty: (bookId: string, format: BookFormat, delta: number, selectedAddonIds?: string[]) => void;
+  removeFromCart: (bookId: string, format: BookFormat, selectedAddonIds?: string[]) => void;
   clearCart: () => void;
   cartCount: number;
   subtotal: number;
@@ -384,44 +385,99 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 3500);
   };
 
-  const addToCart = (book: Book, format: BookFormat, quantity = 1) => {
-    const price = format === 'digital' ? book.prices.digital.price : book.prices.physical.price;
+  const addToCart = (
+    book: Book,
+    format: BookFormat = 'digital',
+    quantity = 1,
+    selectedAddonIds?: string[]
+  ) => {
+    const allAddons = getBookAddons(book);
+    const activeIds =
+      selectedAddonIds && selectedAddonIds.length > 0
+        ? selectedAddonIds
+        : [format === 'digital' ? 'digital' : 'physical'];
+
+    const pricing = calculateAddonsPricing(allAddons, activeIds, book.buy2Get3rdFree);
+    const effectiveFormat: BookFormat = pricing.hasPhysical ? 'physical' : 'digital';
+
+    const cartItem: CartItem = {
+      bookId: book.id,
+      book,
+      format: effectiveFormat,
+      quantity,
+      price: pricing.finalPrice,
+      originalPrice: pricing.originalTotal,
+      selectedAddonIds: activeIds,
+      selectedAddons: pricing.selected,
+      freeAddonDiscount: pricing.freeDiscount,
+    };
 
     setCart((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) => item.bookId === book.id && item.format === format
-      );
+      const addonKey = activeIds.slice().sort().join(',');
+      const existingIndex = prev.findIndex((item) => {
+        if (item.bookId !== book.id) return false;
+        const itemKey = item.selectedAddonIds ? item.selectedAddonIds.slice().sort().join(',') : '';
+        return itemKey ? itemKey === addonKey : item.format === effectiveFormat;
+      });
+
       if (existingIndex > -1) {
         const updated = [...prev];
         updated[existingIndex].quantity += quantity;
         return updated;
       }
-      return [...prev, { bookId: book.id, book, format, quantity, price }];
+      return [...prev, cartItem];
     });
 
-    showToast(`Added "${book.title}" (${format === 'digital' ? 'PDF' : 'Physical Book'}) to cart!`);
+    const dealNote = pricing.freeDiscount > 0 ? ' (3rd Add-on FREE Deal Applied!)' : '';
+    showToast(`Added "${book.title}" to cart!${dealNote}`, 'success');
   };
 
-  const buyNow = (book: Book, format: BookFormat = 'digital', quantity = 1) => {
-    const price = format === 'digital' ? book.prices.digital.price : book.prices.physical.price;
+  const buyNow = (
+    book: Book,
+    format: BookFormat = 'digital',
+    quantity = 1,
+    selectedAddonIds?: string[]
+  ) => {
+    const allAddons = getBookAddons(book);
+    const activeIds =
+      selectedAddonIds && selectedAddonIds.length > 0
+        ? selectedAddonIds
+        : [format === 'digital' ? 'digital' : 'physical'];
+
+    const pricing = calculateAddonsPricing(allAddons, activeIds, book.buy2Get3rdFree);
+    const effectiveFormat: BookFormat = pricing.hasPhysical ? 'physical' : 'digital';
+
     setCart([
       {
         bookId: book.id,
         book,
-        format,
+        format: effectiveFormat,
         quantity,
-        price,
+        price: pricing.finalPrice,
+        originalPrice: pricing.originalTotal,
+        selectedAddonIds: activeIds,
+        selectedAddons: pricing.selected,
+        freeAddonDiscount: pricing.freeDiscount,
       },
     ]);
     setCheckoutStep(1);
     setCurrentView('checkout');
   };
 
-  const updateCartQty = (bookId: string, format: BookFormat, delta: number) => {
+  const updateCartQty = (
+    bookId: string,
+    format: BookFormat,
+    delta: number,
+    selectedAddonIds?: string[]
+  ) => {
+    const addonKey = selectedAddonIds ? selectedAddonIds.slice().sort().join(',') : '';
     setCart((prev) =>
       prev
         .map((item) => {
-          if (item.bookId === bookId && item.format === format) {
+          const itemKey = item.selectedAddonIds ? item.selectedAddonIds.slice().sort().join(',') : '';
+          const match =
+            item.bookId === bookId && (addonKey ? itemKey === addonKey : item.format === format);
+          if (match) {
             const newQty = item.quantity + delta;
             return newQty > 0 ? { ...item, quantity: newQty } : null;
           }
@@ -431,8 +487,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const removeFromCart = (bookId: string, format: BookFormat) => {
-    setCart((prev) => prev.filter((item) => !(item.bookId === bookId && item.format === format)));
+  const removeFromCart = (
+    bookId: string,
+    format: BookFormat,
+    selectedAddonIds?: string[]
+  ) => {
+    const addonKey = selectedAddonIds ? selectedAddonIds.slice().sort().join(',') : '';
+    setCart((prev) =>
+      prev.filter((item) => {
+        if (item.bookId !== bookId) return true;
+        const itemKey = item.selectedAddonIds ? item.selectedAddonIds.slice().sort().join(',') : '';
+        if (addonKey) {
+          return itemKey !== addonKey;
+        }
+        return item.format !== format;
+      })
+    );
     showToast('Item removed from cart', 'info');
   };
 

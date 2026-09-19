@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Star,
   ChevronRight,
@@ -16,10 +16,14 @@ import {
   ExternalLink,
   Plus,
   Users,
+  Check,
+  Tag,
+  Gift,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
-import { BookFormat } from '../types';
+import { BookFormat, ProductAddon } from '../types';
+import { getBookAddons, calculateAddonsPricing } from '../utils/pricing';
 
 export const ProductDetailView: React.FC = () => {
   const {
@@ -38,7 +42,40 @@ export const ProductDetailView: React.FC = () => {
 
   const book = books.find((b) => b.id === selectedBookId) || books[0];
 
-  const [selectedFormat, setSelectedFormat] = useState<BookFormat>('digital');
+  const availableAddons = getBookAddons(book);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(() => [
+    availableAddons[0]?.id || 'digital',
+  ]);
+
+  // Keep selectedAddonIds valid if book changes or addons change
+  useEffect(() => {
+    const addons = getBookAddons(book);
+    setSelectedAddonIds((prev) => {
+      const valid = prev.filter((id) => addons.some((a) => a.id === id));
+      return valid.length > 0 ? valid : [addons[0]?.id || 'digital'];
+    });
+  }, [book.id, book.addons]);
+
+  const pricingCalc = calculateAddonsPricing(
+    availableAddons,
+    selectedAddonIds,
+    book.buy2Get3rdFree
+  );
+
+  const toggleAddonSelection = (addonId: string) => {
+    setSelectedAddonIds((prev) => {
+      if (prev.includes(addonId)) {
+        if (prev.length === 1) {
+          showToast('At least one format or add-on must be selected', 'info');
+          return prev;
+        }
+        return prev.filter((id) => id !== addonId);
+      } else {
+        return [...prev, addonId];
+      }
+    });
+  };
+
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'included' | 'reviews'>('description');
   const [selectedThumbnail, setSelectedThumbnail] = useState<number>(0);
@@ -50,18 +87,19 @@ export const ProductDetailView: React.FC = () => {
   const [reviewBand, setReviewBand] = useState('Band 8.0 Achieved');
   const [reviewComment, setReviewComment] = useState('');
 
-  const activePrice = selectedFormat === 'digital' ? book.prices.digital : book.prices.physical;
   const isFavorited = isInWishlist(book.id);
 
   // Recommendations: exclude current book
   const recommendations = books.filter((b) => b.id !== book.id).slice(0, 4);
 
   const handleAddToCart = () => {
-    addToCart(book, selectedFormat, quantity);
+    const format: BookFormat = pricingCalc.hasPhysical ? 'physical' : 'digital';
+    addToCart(book, format, quantity, selectedAddonIds);
   };
 
   const handleBuyNow = () => {
-    buyNow(book, selectedFormat, quantity);
+    const format: BookFormat = pricingCalc.hasPhysical ? 'physical' : 'digital';
+    buyNow(book, format, quantity, selectedAddonIds);
   };
 
   const handleInlineReviewSubmit = (e: React.FormEvent) => {
@@ -267,85 +305,181 @@ export const ProductDetailView: React.FC = () => {
             </div>
           </div>
 
-          {/* Format Selector Cards (Exact Match from Image 2 Left) */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              Select Format
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Digital Card */}
-              <div
-                onClick={() => setSelectedFormat('digital')}
-                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                  selectedFormat === 'digital'
-                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      selectedFormat === 'digital' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <DownloadCloud className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">Digital (PDF)</h4>
-                    <p className="text-[10px] text-slate-500">Instant Download</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-extrabold text-slate-900">
-                    ₹{book.prices.digital.price}
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="line-through text-slate-400">
-                      ₹{book.prices.digital.originalPrice}
-                    </span>
-                    <span className="font-bold text-emerald-700">
-                      {book.prices.digital.discountPercent}% OFF
-                    </span>
-                  </div>
-                </div>
-              </div>
+          {/* Format & Add-ons Selector Cards (Customizable up to 4 with Buy 2 Get 3rd Free Deal) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Select Add-ons / Formats ({selectedAddonIds.length} Selected)
+              </label>
+              <span className="text-[11px] text-slate-500 font-medium">
+                Click to add or remove options
+              </span>
+            </div>
 
-              {/* Physical Card */}
+            {/* Promotional Deal Banner if configured */}
+            {book.buy2Get3rdFree && (
               <div
-                onClick={() => setSelectedFormat('physical')}
-                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                  selectedFormat === 'physical'
-                    ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                className={`p-3 rounded-2xl border transition-all ${
+                  pricingCalc.freeDiscount > 0
+                    ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/70 border-emerald-300 shadow-2xs'
+                    : selectedAddonIds.length === 2
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50/80 border-amber-300 shadow-2xs'
+                    : 'bg-emerald-50/50 border-emerald-200/80'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      selectedFormat === 'physical' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white ${
+                      pricingCalc.freeDiscount > 0
+                        ? 'bg-emerald-600 shadow-xs'
+                        : selectedAddonIds.length === 2
+                        ? 'bg-amber-500 shadow-xs'
+                        : 'bg-emerald-600'
                     }`}
                   >
-                    <BookOpen className="w-4 h-4" />
+                    {pricingCalc.freeDiscount > 0 ? (
+                      <Gift className="w-4 h-4 animate-bounce" />
+                    ) : (
+                      <Tag className="w-4 h-4" />
+                    )}
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">Physical (Printed)</h4>
-                    <p className="text-[10px] text-slate-500">Delivered in 3-5 days</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-extrabold text-slate-900">
-                    ₹{book.prices.physical.price}
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="line-through text-slate-400">
-                      ₹{book.prices.physical.originalPrice}
-                    </span>
-                    <span className="font-bold text-emerald-700">
-                      {book.prices.physical.discountPercent}% OFF
-                    </span>
+                  <div className="text-xs leading-snug flex-1">
+                    {pricingCalc.freeDiscount > 0 ? (
+                      <div>
+                        <div className="font-black text-emerald-950 flex items-center gap-1.5 flex-wrap">
+                          <span>🎉 BUY 2 GET 3RD FREE APPLIED!</span>
+                          <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Save ₹{pricingCalc.freeDiscount}
+                          </span>
+                        </div>
+                        <p className="text-emerald-800 text-[11px] mt-0.5">
+                          You unlocked <strong>"{pricingCalc.freeAddonItem?.name}"</strong> at <strong>₹0 FREE</strong>!
+                        </p>
+                      </div>
+                    ) : selectedAddonIds.length === 2 ? (
+                      <div>
+                        <span className="font-extrabold text-amber-950 block">
+                          🔥 Just 1 more add-on away from FREE!
+                        </span>
+                        <p className="text-amber-800 text-[11px] mt-0.5">
+                          Select 1 more add-on below to get your 3rd one completely <strong>FREE (₹0)</strong>!
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-extrabold text-emerald-950 block">
+                          {book.addonDealText || '🎁 Special Offer: Buy 2 Add-ons, Get 3rd FREE!'}
+                        </span>
+                        <p className="text-emerald-800 text-[11px] mt-0.5">
+                          Choose any 3 add-ons below and the 3rd one will be automatically free in checkout.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Add-on Cards Grid (Renders up to 4 add-ons) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {availableAddons.map((addon) => {
+                const isSelected = selectedAddonIds.includes(addon.id);
+                const isFree =
+                  pricingCalc.freeDiscount > 0 && pricingCalc.freeAddonItem?.id === addon.id;
+                const isPhysical = addon.deliveryOption === 'physical';
+
+                return (
+                  <div
+                    key={addon.id}
+                    onClick={() => toggleAddonSelection(addon.id)}
+                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between relative select-none ${
+                      isSelected
+                        ? 'border-emerald-600 bg-emerald-50/40 shadow-xs ring-1 ring-emerald-500/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                          isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {isSelected ? (
+                          <Check className="w-4 h-4 stroke-[3]" />
+                        ) : isPhysical ? (
+                          <BookOpen className="w-4 h-4" />
+                        ) : (
+                          <DownloadCloud className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                            {addon.name}
+                          </h4>
+                          {isFree && (
+                            <span className="text-[9px] font-black text-emerald-800 bg-emerald-200/90 px-1.5 py-0.5 rounded-sm uppercase tracking-wide">
+                              FREE DEAL
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate">{addon.subtitle}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      {isFree ? (
+                        <div>
+                          <div className="text-xs font-black text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                            ₹0 FREE
+                          </div>
+                          <div className="text-[10px] line-through text-slate-400 mt-0.5">
+                            ₹{addon.price}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-sm font-extrabold text-slate-900">
+                            ₹{addon.price}
+                          </div>
+                          <div className="flex items-center justify-end gap-1 text-[10px]">
+                            {addon.originalPrice > addon.price && (
+                              <span className="line-through text-slate-400">
+                                ₹{addon.originalPrice}
+                              </span>
+                            )}
+                            {(addon.discountPercent ?? 0) > 0 && (
+                              <span className="font-bold text-emerald-700">
+                                {addon.discountPercent}% OFF
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Total Summary Bar */}
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">Total Price:</span>
+                <span className="text-base font-extrabold text-[#0a2540]">
+                  ₹{pricingCalc.finalPrice * quantity}
+                </span>
+                {pricingCalc.originalTotal > pricingCalc.finalPrice && (
+                  <span className="line-through text-slate-400 text-[11px]">
+                    ₹{pricingCalc.originalTotal * quantity}
+                  </span>
+                )}
+              </div>
+              {pricingCalc.savingsTotal > 0 && (
+                <span className="font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-0.5 rounded-full text-[11px]">
+                  Save ₹{pricingCalc.savingsTotal * quantity}
+                </span>
+              )}
             </div>
           </div>
 

@@ -51,81 +51,120 @@ export const CartView: React.FC = () => {
           {/* Cart Items List (8 cols) */}
           <div className="lg:col-span-8 space-y-4">
             <div className="divide-y divide-slate-200 border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-xs">
-              {cart.map((item) => (
-                <div
-                  key={`${item.bookId}-${item.format}`}
-                  className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div
-                      onClick={() => navigateToProduct(item.bookId)}
-                      className="cursor-pointer shrink-0"
-                    >
-                      <BookCover book={item.book} size="sm" showShadow={false} />
-                    </div>
+              {cart.map((item, idx) => {
+                const itemKey = `${item.bookId}-${
+                  item.selectedAddonIds ? item.selectedAddonIds.slice().sort().join('-') : item.format
+                }-${idx}`;
 
-                    <div className="min-w-0 space-y-1">
-                      <h3
+                return (
+                  <div
+                    key={itemKey}
+                    className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div
                         onClick={() => navigateToProduct(item.bookId)}
-                        className="text-sm sm:text-base font-semibold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] hover:text-emerald-700 cursor-pointer truncate"
+                        className="cursor-pointer shrink-0"
                       >
-                        {item.book.title}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                            item.format === 'digital'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}
+                        <BookCover book={item.book} size="sm" showShadow={false} />
+                      </div>
+
+                      <div className="min-w-0 space-y-1">
+                        <h3
+                          onClick={() => navigateToProduct(item.bookId)}
+                          className="text-sm sm:text-base font-semibold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] hover:text-emerald-700 cursor-pointer truncate"
                         >
-                          {item.format === 'digital' ? 'Digital (PDF eBook)' : 'Paperback Printed'}
-                        </span>
-                        <span className="text-xs text-slate-400">•</span>
-                        <span className="text-xs text-slate-500 font-medium">
-                          {item.book.category}
-                        </span>
+                          {item.book.title}
+                        </h3>
+
+                        {item.selectedAddons && item.selectedAddons.length > 0 ? (
+                          <div className="space-y-1 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {item.selectedAddons.map((addon) => {
+                                const isFree =
+                                  item.freeAddonDiscount &&
+                                  item.freeAddonDiscount > 0 &&
+                                  addon.price === item.freeAddonDiscount;
+                                return (
+                                  <span
+                                    key={addon.id}
+                                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                                      isFree
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold'
+                                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    {addon.name} {isFree ? '• FREE (₹0)' : `• ₹${addon.price}`}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            {item.freeAddonDiscount && item.freeAddonDiscount > 0 && (
+                              <div className="text-[10px] font-bold text-emerald-700">
+                                🎁 "Buy 2 Get 3rd Free" Applied: Saved ₹
+                                {item.freeAddonDiscount * item.quantity}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                                item.format === 'digital'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}
+                            >
+                              {item.format === 'digital' ? 'Digital (PDF eBook)' : 'Paperback Printed'}
+                            </span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs text-slate-500 font-medium">
+                              {item.book.category}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="text-sm font-bold text-slate-900 pt-1">
+                          ₹{item.price}
+                        </div>
                       </div>
-                      <div className="text-sm font-bold text-slate-900 pt-1">
-                        ₹{item.price}
+                    </div>
+
+                    {/* Quantity & Delete */}
+                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
+                        <button
+                          onClick={() => updateCartQty(item.bookId, item.format, -1, item.selectedAddonIds)}
+                          className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-xs font-bold"
+                        >
+                          -
+                        </button>
+                        <span className="w-8 text-center text-xs font-bold text-slate-900">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateCartQty(item.bookId, item.format, 1, item.selectedAddonIds)}
+                          className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-xs font-bold"
+                        >
+                          +
+                        </button>
                       </div>
+
+                      <div className="text-sm font-bold text-slate-900 min-w-[70px] text-right">
+                        ₹{item.price * item.quantity}
+                      </div>
+
+                      <button
+                        onClick={() => removeFromCart(item.bookId, item.format, item.selectedAddonIds)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Quantity & Delete */}
-                  <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
-                      <button
-                        onClick={() => updateCartQty(item.bookId, item.format, -1)}
-                        className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-xs font-bold text-slate-900">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateCartQty(item.bookId, item.format, 1)}
-                        className="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-100 text-xs font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    <div className="text-sm font-bold text-slate-900 min-w-[70px] text-right">
-                      ₹{item.price * item.quantity}
-                    </div>
-
-                    <button
-                      onClick={() => removeFromCart(item.bookId, item.format)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="Remove item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Note regarding digital downloads */}

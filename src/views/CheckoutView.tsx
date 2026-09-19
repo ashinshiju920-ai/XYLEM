@@ -52,12 +52,15 @@ export const CheckoutView: React.FC = () => {
     showToast,
   } = useShop();
 
-  // Active book for preview (default to IELTS full prep matching the mockup)
-  const activeBook: Book = cart.length > 0 ? cart[0].book : (BOOKS.find((b) => b.id === 'ielts-full-prep') || BOOKS[0]);
-  const activeFormat = cart.length > 0 ? cart[0].format : 'digital';
-  const originalPrice = activeFormat === 'digital' ? activeBook.prices.digital.originalPrice : activeBook.prices.physical.originalPrice;
-  const currentPrice = activeFormat === 'digital' ? activeBook.prices.digital.price : activeBook.prices.physical.price;
-  const savingsAmount = originalPrice - currentPrice;
+  // Active book & pricing calculations for preview
+  const primaryItem = cart.length > 0 ? cart[0] : null;
+  const activeBook: Book = primaryItem?.book || (BOOKS.find((b) => b.id === 'ielts-full-prep') || BOOKS[0]);
+  const activeFormat = primaryItem?.format || 'digital';
+  const originalPrice = primaryItem?.originalPrice || (activeFormat === 'digital' ? activeBook.prices.digital.originalPrice : activeBook.prices.physical.originalPrice);
+  const currentPrice = primaryItem?.price || (activeFormat === 'digital' ? activeBook.prices.digital.price : activeBook.prices.physical.price);
+  const totalFreeAddonDiscount = cart.reduce((sum, item) => sum + ((item.freeAddonDiscount || 0) * item.quantity), 0);
+  const totalOriginalPrice = cart.reduce((sum, item) => sum + ((item.originalPrice || item.price) * item.quantity), 0);
+  const savingsAmount = Math.max(0, (totalOriginalPrice > 0 ? totalOriginalPrice : originalPrice) - (subtotal > 0 ? subtotal : currentPrice));
 
   // Checkout step: 1 = Shipping, 2 = Payment (default from mockup), 3 = Review
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(2);
@@ -1098,41 +1101,55 @@ export const CheckoutView: React.FC = () => {
                     )}
                   </div>
 
-                  <ul className="space-y-1 text-[11px] text-slate-600 pt-1">
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                      <span>Complete syllabus coverage</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                      <span>500+ practice questions</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                      <span>Full-length mock tests</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                      <span>Exam strategies & tips</span>
-                    </li>
-                  </ul>
+                  {/* Included Add-ons Pills if configured */}
+                  {primaryItem?.selectedAddons && primaryItem.selectedAddons.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {primaryItem.selectedAddons.map((addon) => (
+                        <span
+                          key={addon.id}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200"
+                        >
+                          {addon.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1 text-[11px] text-slate-600 pt-1">
+                      <li className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Complete syllabus coverage</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>500+ practice questions</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Full-length mock tests</span>
+                      </li>
+                    </ul>
+                  )}
 
                   {/* Pricing row */}
                   <div className="flex items-baseline gap-2 pt-2">
-                    <span className="text-xs text-slate-400 line-through">
-                      ₹{originalPrice}
-                    </span>
+                    {originalPrice > currentPrice && (
+                      <span className="text-xs text-slate-400 line-through">
+                        ₹{originalPrice}
+                      </span>
+                    )}
                     <span className="text-xl font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
                       ₹{currentPrice}
                     </span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      {activeFormat === 'digital' ? activeBook.prices.digital.discountPercent : activeBook.prices.physical.discountPercent}% OFF
-                    </span>
+                    {originalPrice > currentPrice && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}% OFF
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Highlight bar: You Save ₹400! */}
+              {/* Highlight bar: You Save ₹... */}
               <div className="bg-[#ecfdf5] border border-emerald-200/80 rounded-xl p-2.5 text-center text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-emerald-600" />
                 <span>You Save ₹{savingsAmount > 0 ? savingsAmount : 400}!</span>
@@ -1150,20 +1167,86 @@ export const CheckoutView: React.FC = () => {
                     Order Summary
                   </h4>
                 </div>
-                <span className="text-[11px] text-slate-500">{cart.length || 1} Item</span>
+                <span className="text-[11px] text-slate-500">
+                  {cart.reduce((s, i) => s + i.quantity, 0) || 1} Item(s)
+                </span>
               </div>
 
-              {/* Line item */}
-              <div className="flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 truncate">
-                  <div className="w-7 h-9 bg-slate-900 rounded shrink-0 flex items-center justify-center text-white text-[8px] font-bold">
-                    PDF
+              {/* Itemized Cart List with Add-ons */}
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1 divide-y divide-slate-100">
+                {cart.length > 0 ? (
+                  cart.map((item, idx) => (
+                    <div key={`${item.bookId}-${idx}`} className="pt-2 first:pt-0 space-y-1.5">
+                      <div className="flex items-start justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-8 bg-slate-900 rounded shrink-0 flex items-center justify-center text-white text-[7px] font-bold uppercase">
+                            {item.format === 'physical' ? 'PRINT' : 'DIGITAL'}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-slate-900 font-bold block truncate">
+                              {item.book.title}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Qty: {item.quantity}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-extrabold text-slate-900 shrink-0">
+                          ₹{item.price * item.quantity}
+                        </span>
+                      </div>
+
+                      {/* Selected add-ons list */}
+                      {item.selectedAddons && item.selectedAddons.length > 0 && (
+                        <div className="pl-8 space-y-1 text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Included Add-ons ({item.selectedAddons.length}):
+                          </div>
+                          {item.selectedAddons.map((addon) => {
+                            const isFree =
+                              item.freeAddonDiscount &&
+                              item.freeAddonDiscount > 0 &&
+                              addon.price === item.freeAddonDiscount;
+                            return (
+                              <div
+                                key={addon.id}
+                                className="flex items-center justify-between text-slate-600"
+                              >
+                                <span className="truncate flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                  <span className="truncate">{addon.name}</span>
+                                </span>
+                                {isFree ? (
+                                  <span className="font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded text-[9px] uppercase">
+                                    FREE DEAL
+                                  </span>
+                                ) : (
+                                  <span className="font-semibold text-slate-700">
+                                    ₹{addon.price}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Free 3rd addon deal note */}
+                      {item.freeAddonDiscount && item.freeAddonDiscount > 0 && (
+                        <div className="pl-8 text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                          <span>🎁 "Buy 2 Get 3rd Free" Applied (-₹{item.freeAddonDiscount * item.quantity})</span>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="text-slate-800 font-medium truncate">
+                      {activeBook.title}
+                    </span>
+                    <span className="font-bold text-slate-900 shrink-0">₹{currentPrice}</span>
                   </div>
-                  <span className="text-slate-800 font-medium truncate">
-                    {activeBook.title}
-                  </span>
-                </div>
-                <span className="font-bold text-slate-900 shrink-0">₹{currentPrice}</span>
+                )}
               </div>
 
               {/* Coupon Code Section */}
@@ -1205,18 +1288,31 @@ export const CheckoutView: React.FC = () => {
               <div className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-semibold text-slate-900">₹{subtotal > 0 ? subtotal : currentPrice}</span>
+                  <span className="font-semibold text-slate-900">
+                    ₹{subtotal > 0 ? subtotal : currentPrice}
+                  </span>
                 </div>
 
-                <div className="flex justify-between text-emerald-700 font-semibold">
-                  <span className="flex items-center gap-1">
-                    <span>Discount</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
-                      {appliedCoupon ? appliedCoupon : 'SPECIAL OFFER'}
+                {totalFreeAddonDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span className="flex items-center gap-1">
+                      <span>🎁 3rd Add-on Deal</span>
                     </span>
-                  </span>
-                  <span>-₹{discount > 0 ? discount : savingsAmount}</span>
-                </div>
+                    <span>FREE (₹0)</span>
+                  </div>
+                )}
+
+                {discount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span className="flex items-center gap-1">
+                      <span>Discount</span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
+                        {appliedCoupon ? appliedCoupon : 'SPECIAL OFFER'}
+                      </span>
+                    </span>
+                    <span>-₹{discount}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between">
                   <span>Delivery</span>

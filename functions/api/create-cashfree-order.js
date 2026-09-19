@@ -47,13 +47,12 @@ export async function onRequestPost(context) {
     } = body;
 
     // Server-side price calculation & verification
-    // Default single study guide price is ₹199 (as per user spec)
     let basePrice = 199;
 
     if (Array.isArray(cart) && cart.length > 0) {
       const cartSubtotal = cart.reduce((sum, it) => {
-        const itemPrice = it.price || (it.format === 'physical' ? 899 : 199);
-        const qty = it.quantity || 1;
+        const itemPrice = Number(it.price) || (it.format === 'physical' ? 899 : 199);
+        const qty = Number(it.quantity) || 1;
         return sum + itemPrice * qty;
       }, 0);
       if (cartSubtotal > 0) {
@@ -62,6 +61,10 @@ export async function onRequestPost(context) {
     } else if (typeof requestedAmount === 'number' && requestedAmount > 0) {
       basePrice = requestedAmount;
     }
+
+    // Physical delivery fee (₹99 for physical shipping)
+    const hasPhysical = Array.isArray(cart) && cart.some((it) => it.format === 'physical');
+    const deliveryFee = hasPhysical && shippingInfo.deliveryOption === 'physical' ? 99 : 0;
 
     // Apply coupon discount server-side if provided
     let discount = 0;
@@ -76,7 +79,10 @@ export async function onRequestPost(context) {
       }
     }
 
-    const finalAmount = Math.max(1, Math.round(basePrice - discount));
+    let finalAmount = Math.max(1, Math.round(basePrice + deliveryFee - discount));
+    if (typeof requestedAmount === 'number' && requestedAmount > 0 && Math.abs(requestedAmount - finalAmount) <= 5) {
+      finalAmount = requestedAmount;
+    }
 
     const timestamp = Math.round(Date.now() / 1000);
     const orderId = `order_${timestamp}_${Math.floor(1000 + Math.random() * 9000)}`;
