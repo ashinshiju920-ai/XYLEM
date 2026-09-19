@@ -30,7 +30,6 @@ export const ProductDetailView: React.FC = () => {
     openCart,
     setCurrentView,
     navigateToProduct,
-    openPdfViewer,
     toggleWishlist,
     isInWishlist,
     addReview,
@@ -197,14 +196,7 @@ export const ProductDetailView: React.FC = () => {
               })()}
             </div>
 
-            {/* Quick Preview Button */}
-            <button
-              onClick={() => openPdfViewer(book)}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 text-xs font-semibold shadow-xs transition-colors"
-            >
-              <BookOpen className="w-4 h-4 text-emerald-600" />
-              <span>Preview Sample Pages</span>
-            </button>
+
           </div>
         </div>
 
