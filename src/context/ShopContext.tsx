@@ -36,6 +36,7 @@ interface ShopContextType {
   // Cart
   cart: CartItem[];
   addToCart: (book: Book, format: BookFormat, quantity?: number) => void;
+  buyNow: (book: Book, format?: BookFormat, quantity?: number) => void;
   updateCartQty: (bookId: string, format: BookFormat, delta: number) => void;
   removeFromCart: (bookId: string, format: BookFormat) => void;
   clearCart: () => void;
@@ -217,6 +218,21 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     showToast(`Added "${book.title}" (${format === 'digital' ? 'PDF' : 'Physical Book'}) to cart!`);
+  };
+
+  const buyNow = (book: Book, format: BookFormat = 'digital', quantity = 1) => {
+    const price = format === 'digital' ? book.prices.digital.price : book.prices.physical.price;
+    setCart([
+      {
+        bookId: book.id,
+        book,
+        format,
+        quantity,
+        price,
+      },
+    ]);
+    setCheckoutStep(1);
+    setCurrentView('checkout');
   };
 
   const updateCartQty = (bookId: string, format: BookFormat, delta: number) => {
@@ -525,6 +541,7 @@ startxref
 
         cart,
         addToCart,
+        buyNow,
         updateCartQty,
         removeFromCart,
         clearCart,

@@ -24,6 +24,7 @@ export const HomeView: React.FC = () => {
     navigateToProduct,
     navigateToCatalog,
     addToCart,
+    buyNow,
     openPdfViewer,
   } = useShop();
 
@@ -343,11 +344,11 @@ export const HomeView: React.FC = () => {
                 </div>
 
                 <button
-                  id={`add-to-cart-${book.id}`}
-                  onClick={() => addToCart(book, 'digital')}
-                  className="w-full py-2.5 px-3 rounded-xl bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 font-['DM_Sans',sans-serif]"
+                  id={`buy-now-${book.id}`}
+                  onClick={() => buyNow(book, 'digital')}
+                  className="w-full py-2.5 px-3 rounded-xl bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-95 font-['DM_Sans',sans-serif]"
                 >
-                  <span>Add to Cart</span>
+                  <span>Buy Now</span>
                 </button>
               </div>
             </div>

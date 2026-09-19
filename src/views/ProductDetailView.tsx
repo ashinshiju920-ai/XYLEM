@@ -25,6 +25,7 @@ export const ProductDetailView: React.FC = () => {
     books,
     selectedBookId,
     addToCart,
+    buyNow,
     openCart,
     setCurrentView,
     navigateToProduct,
@@ -60,8 +61,7 @@ export const ProductDetailView: React.FC = () => {
   };
 
   const handleBuyNow = () => {
-    addToCart(book, selectedFormat, quantity);
-    openCart();
+    buyNow(book, selectedFormat, quantity);
   };
 
   const handleInlineReviewSubmit = (e: React.FormEvent) => {
@@ -724,11 +724,11 @@ export const ProductDetailView: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  addToCart(rec, 'digital');
+                  buyNow(rec, 'digital');
                 }}
-                className="mt-3 w-full py-1.5 bg-[#00875a] hover:bg-[#00734c] text-white text-[11px] font-semibold rounded-lg font-['DM_Sans',sans-serif]"
+                className="mt-3 w-full py-1.5 bg-[#00875a] hover:bg-[#00734c] text-white text-[11px] font-bold rounded-lg font-['DM_Sans',sans-serif] active:scale-95"
               >
-                Add to Cart
+                Buy Now
               </button>
             </div>
           ))}
@@ -757,9 +757,7 @@ export const ProductDetailView: React.FC = () => {
           </div>
           <button
             onClick={() => {
-              setSelectedFormat('physical');
-              addToCart(book, 'physical');
-              openCart();
+              buyNow(book, 'physical');
             }}
             className="px-5 py-2.5 bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
           >
