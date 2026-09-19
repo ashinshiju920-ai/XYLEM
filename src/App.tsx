@@ -11,7 +11,6 @@ import { CartDrawer } from './components/CartDrawer';
 import { SearchModal } from './components/SearchModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { ContactModal } from './components/ContactModal';
-import { SocialProofToast } from './components/SocialProofToast';
 
 // Views
 import { HomeView } from './views/HomeView';
@@ -77,9 +76,6 @@ const ShopApp: React.FC = () => {
           </button>
         )}
       </div>
-
-      {/* Real-time Social Proof Toast ticker */}
-      <SocialProofToast />
 
       {/* Global Modals & Drawers */}
       <CartDrawer />
