@@ -480,50 +480,7 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 7. FREE RESOURCES (Image 5) */}
-      <section className="bg-[#0b1f33] py-12 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-4">
-              <span className="text-xs font-semibold tracking-widest uppercase text-emerald-400 block mb-1 font-['DM_Sans',sans-serif]">
-                FREE RESOURCES
-              </span>
-              <h2 className="text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white">
-                Learn More. For Free.
-              </h2>
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed font-['DM_Sans',sans-serif]">
-                Access free study resources, sample chapters, and useful tips to kickstart your preparation today.
-              </p>
-            </div>
-
-            <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {[
-                { title: 'IELTS Vocabulary', action: 'Download Now', book: books[0] },
-                { title: 'OET Practice', action: 'Explore Now', book: books[1] || books[0] },
-                { title: 'PTE Tips', action: 'View Resources', book: books[3] || books[0] },
-                { title: 'German Learning', action: 'Get Started', book: books[2] || books[0] },
-                { title: 'Free PDFs', action: 'Download Now', book: books[0] },
-              ].map((res, i) => (
-                <button
-                  key={i}
-                  onClick={() => openPdfViewer(res.book)}
-                  className="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 p-3.5 rounded-xl text-left transition-all group"
-                >
-                  <div className="text-xs font-semibold text-white font-['Plus_Jakarta_Sans',sans-serif] group-hover:text-emerald-300">
-                    {res.title}
-                  </div>
-                  <div className="text-[10px] text-emerald-400 font-semibold mt-2 flex items-center gap-1 font-['DM_Sans',sans-serif]">
-                    <span>{res.action}</span>
-                    <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. CALL TO ACTION BANNER (Image 5 & Image 3) */}
+      {/* 7. CALL TO ACTION BANNER (Image 5 & Image 3) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative rounded-3xl overflow-hidden shadow-xl bg-gradient-to-r from-[#0a2540] via-[#0f3459] to-[#041525] p-8 sm:p-12 text-white">
           <div className="max-w-2xl space-y-4">
