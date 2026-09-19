@@ -1,0 +1,586 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial } from '../types';
+import { BOOKS } from '../data/books';
+import { TESTIMONIALS } from '../data/testimonials';
+
+interface Toast {
+  id: string;
+  message: string;
+  type?: 'success' | 'info' | 'warning';
+}
+
+interface ShopContextType {
+  // Navigation
+  currentView: ViewType;
+  setCurrentView: (view: ViewType) => void;
+  selectedCategory: ExamCategory;
+  setSelectedCategory: (cat: ExamCategory) => void;
+  selectedBookId: string;
+  setSelectedBookId: (id: string) => void;
+  checkoutStep: 1 | 2 | 3;
+  setCheckoutStep: (step: 1 | 2 | 3) => void;
+
+  // Products & Books Catalog
+  books: Book[];
+  addBook: (book: Book) => void;
+  updateBook: (id: string, updated: Partial<Book>) => void;
+  deleteBook: (id: string) => void;
+  resetBooksToDefault: () => void;
+
+  // Testimonials & Reviews
+  testimonials: Testimonial[];
+  addTestimonial: (testimonial: Omit<Testimonial, 'id'>) => void;
+  deleteTestimonial: (id: string) => void;
+  addReview: (bookId: string, review: Omit<Review, 'id' | 'date'>) => void;
+
+  // Cart
+  cart: CartItem[];
+  addToCart: (book: Book, format: BookFormat, quantity?: number) => void;
+  updateCartQty: (bookId: string, format: BookFormat, delta: number) => void;
+  removeFromCart: (bookId: string, format: BookFormat) => void;
+  clearCart: () => void;
+  cartCount: number;
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  total: number;
+
+  // Coupon
+  couponCode: string;
+  appliedCoupon: string | null;
+  couponDiscount: number;
+  applyCoupon: (code: string) => boolean;
+  removeCoupon: () => void;
+
+  // Wishlist
+  wishlist: string[];
+  toggleWishlist: (bookId: string) => void;
+  isInWishlist: (bookId: string) => boolean;
+
+  // Shipping & Orders
+  shippingInfo: ShippingInfo;
+  setShippingInfo: React.Dispatch<React.SetStateAction<ShippingInfo>>;
+  currentOrder: Order | null;
+  orders: Order[];
+  placeOrder: (paymentMethod: 'upi' | 'card' | 'netbanking' | 'wallets') => Promise<Order>;
+
+  // Search & Modals
+  isSearchOpen: boolean;
+  setIsSearchOpen: (open: boolean) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+
+  // PDF Preview & Reader
+  isPdfModalOpen: boolean;
+  activePdfBook: Book | null;
+  openPdfViewer: (book: Book) => void;
+  closePdfViewer: () => void;
+  downloadBookPdf: (book: Book) => void;
+
+  // Support / Contact Modal
+  isContactModalOpen: boolean;
+  setIsContactModalOpen: (open: boolean) => void;
+
+  // Toasts
+  toasts: Toast[];
+  showToast: (message: string, type?: 'success' | 'info' | 'warning') => void;
+
+  // Helpers
+  navigateToProduct: (bookId: string) => void;
+  navigateToCatalog: (category?: ExamCategory) => void;
+  openCart: () => void;
+}
+
+const defaultShipping: ShippingInfo = {
+  fullName: 'Ashin Shiju',
+  email: 'ashin.shiju@example.com',
+  phone: '9876543210',
+  addressLine1: 'Building 4B, Green Park Avenue',
+  addressLine2: 'Near Metro Station',
+  city: 'Kochi',
+  state: 'Kerala',
+  pinCode: '682016',
+  deliveryOption: 'digital',
+  saveAddress: true,
+};
+
+const ShopContext = createContext<ShopContextType | undefined>(undefined);
+
+export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentView, setCurrentView] = useState<ViewType>('home');
+  const [selectedCategory, setSelectedCategory] = useState<ExamCategory>('All');
+  const [selectedBookId, setSelectedBookId] = useState<string>('ielts-full-prep');
+  const [checkoutStep, setCheckoutStep] = useState<1 | 2 | 3>(1);
+
+  // Persistent Books State
+  const [books, setBooks] = useState<Book[]>(() => {
+    try {
+      const saved = localStorage.getItem('xylem_books_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load books from storage:', e);
+    }
+    return BOOKS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xylem_books_data', JSON.stringify(books));
+    } catch (e) {
+      console.error('Failed to save books to storage:', e);
+    }
+  }, [books]);
+
+  // Persistent Testimonials State
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    try {
+      const saved = localStorage.getItem('xylem_testimonials_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load testimonials from storage:', e);
+    }
+    return TESTIMONIALS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xylem_testimonials_data', JSON.stringify(testimonials));
+    } catch (e) {
+      console.error('Failed to save testimonials to storage:', e);
+    }
+  }, [testimonials]);
+
+  // Cart state initialized with 1 default item (IELTS Full Preparation Digital) matching the mockup!
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const defaultBook = books.find((b) => b.id === 'ielts-full-prep') || books[0] || BOOKS[0];
+    return [
+      {
+        bookId: defaultBook.id,
+        book: defaultBook,
+        format: 'digital',
+        quantity: 1,
+        price: defaultBook.prices.digital.price,
+      },
+    ];
+  });
+
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [shippingInfo, setShippingInfo] = useState<ShippingInfo>(defaultShipping);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponDiscount, setCouponDiscount] = useState<number>(0);
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [activePdfBook, setActivePdfBook] = useState<Book | null>(null);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Scroll to top on view changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentView, selectedBookId, selectedCategory]);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  };
+
+  const addToCart = (book: Book, format: BookFormat, quantity = 1) => {
+    const price = format === 'digital' ? book.prices.digital.price : book.prices.physical.price;
+
+    setCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) => item.bookId === book.id && item.format === format
+      );
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        updated[existingIndex].quantity += quantity;
+        return updated;
+      }
+      return [...prev, { bookId: book.id, book, format, quantity, price }];
+    });
+
+    showToast(`Added "${book.title}" (${format === 'digital' ? 'PDF' : 'Physical Book'}) to cart!`);
+  };
+
+  const updateCartQty = (bookId: string, format: BookFormat, delta: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.bookId === bookId && item.format === format) {
+            const newQty = item.quantity + delta;
+            return newQty > 0 ? { ...item, quantity: newQty } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as CartItem[]
+    );
+  };
+
+  const removeFromCart = (bookId: string, format: BookFormat) => {
+    setCart((prev) => prev.filter((item) => !(item.bookId === bookId && item.format === format)));
+    showToast('Item removed from cart', 'info');
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const toggleWishlist = (bookId: string) => {
+    setWishlist((prev) => {
+      const exists = prev.includes(bookId);
+      if (exists) {
+        showToast('Removed from your wishlist', 'info');
+        return prev.filter((id) => id !== bookId);
+      } else {
+        showToast('Saved to your wishlist!', 'success');
+        return [...prev, bookId];
+      }
+    });
+  };
+
+  const isInWishlist = (bookId: string) => wishlist.includes(bookId);
+
+  // Calculations
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Check if any physical book in cart
+  const hasPhysicalItem = cart.some((item) => item.format === 'physical');
+  const deliveryFee = hasPhysicalItem && shippingInfo.deliveryOption === 'physical' ? 99 : 0;
+
+  const total = Math.max(0, subtotal + deliveryFee - couponDiscount);
+
+  // Coupon handling
+  const applyCoupon = (code: string): boolean => {
+    const clean = code.trim().toUpperCase();
+    if (!clean) return false;
+
+    if (clean === 'XYLEM20') {
+      const discountVal = Math.round(subtotal * 0.2);
+      setAppliedCoupon('XYLEM20');
+      setCouponDiscount(discountVal);
+      showToast('Coupon XYLEM20 applied! 20% discount added.');
+      return true;
+    } else if (clean === 'FIRST50') {
+      const discountVal = Math.min(50, subtotal);
+      setAppliedCoupon('FIRST50');
+      setCouponDiscount(discountVal);
+      showToast('Coupon FIRST50 applied! ₹50 off.');
+      return true;
+    } else if (clean === 'SPECIALOFFER' || clean === 'OFFER67') {
+      const discountVal = Math.round(subtotal * 0.15);
+      setAppliedCoupon(clean);
+      setCouponDiscount(discountVal);
+      showToast(`Coupon ${clean} applied!`);
+      return true;
+    } else {
+      showToast('Invalid coupon code. Try XYLEM20 or FIRST50', 'warning');
+      return false;
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    showToast('Coupon removed');
+  };
+
+  const placeOrder = async (paymentMethod: 'upi' | 'card' | 'netbanking' | 'wallets'): Promise<Order> => {
+    // Generate order
+    const orderNumber = `XL${new Date().getFullYear()}${Math.floor(100000 + Math.random() * 900000)}`;
+    const newOrder: Order = {
+      id: orderNumber,
+      date: new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      items: [...cart],
+      shipping: { ...shippingInfo },
+      subtotal,
+      discount: couponDiscount,
+      deliveryFee,
+      total,
+      paymentMethod,
+      status: 'confirmed',
+      paymentId: `PAY_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+    };
+
+    setOrders((prev) => [newOrder, ...prev]);
+    setCurrentOrder(newOrder);
+    clearCart();
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
+    setCurrentView('order-success');
+    return newOrder;
+  };
+
+  const navigateToProduct = (bookId: string) => {
+    setSelectedBookId(bookId);
+    setCurrentView('product');
+  };
+
+  const navigateToCatalog = (category: ExamCategory = 'All') => {
+    setSelectedCategory(category);
+    setCurrentView('catalog');
+  };
+
+  const openCart = () => {
+    setCurrentView('cart');
+  };
+
+  const openPdfViewer = (book: Book) => {
+    setActivePdfBook(book);
+    setIsPdfModalOpen(true);
+  };
+
+  const closePdfViewer = () => {
+    setIsPdfModalOpen(false);
+  };
+
+  const addBook = (newBook: Book) => {
+    setBooks((prev) => [newBook, ...prev]);
+    showToast(`Book "${newBook.title}" published to catalog!`, 'success');
+  };
+
+  const updateBook = (id: string, updated: Partial<Book>) => {
+    setBooks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, ...updated } : b))
+    );
+    showToast('Book updated successfully!', 'success');
+  };
+
+  const deleteBook = (id: string) => {
+    setBooks((prev) => prev.filter((b) => b.id !== id));
+    showToast('Book removed from store', 'info');
+  };
+
+  const resetBooksToDefault = () => {
+    setBooks(BOOKS);
+    setTestimonials(TESTIMONIALS);
+    localStorage.removeItem('xylem_books_data');
+    localStorage.removeItem('xylem_testimonials_data');
+    showToast('Catalog restored to default books & reviews', 'info');
+  };
+
+  const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
+    const newTestimonial: Testimonial = {
+      ...item,
+      id: `test-${Date.now()}`,
+    };
+    setTestimonials((prev) => [newTestimonial, ...prev]);
+    showToast('Student testimonial published!', 'success');
+  };
+
+  const deleteTestimonial = (id: string) => {
+    setTestimonials((prev) => prev.filter((t) => t.id !== id));
+    showToast('Testimonial removed', 'info');
+  };
+
+  const addReview = (bookId: string, reviewData: Omit<Review, 'id' | 'date'>) => {
+    const newReview: Review = {
+      ...reviewData,
+      id: `rev-${Date.now()}`,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+
+    setBooks((prev) =>
+      prev.map((b) => {
+        if (b.id === bookId) {
+          const currentReviews = b.reviews || [];
+          const updatedReviews = [newReview, ...currentReviews];
+          const newCount = (b.reviewCount || 0) + 1;
+          const totalRatingSum = updatedReviews.reduce((sum, r) => sum + r.rating, 0);
+          const newAvgRating = Number((totalRatingSum / updatedReviews.length).toFixed(1));
+          return {
+            ...b,
+            reviews: updatedReviews,
+            reviewCount: newCount,
+            rating: newAvgRating,
+          };
+        }
+        return b;
+      })
+    );
+    showToast('Review submitted and verified!', 'success');
+  };
+
+  const downloadBookPdf = (book: Book) => {
+    if (book.pdfUrl) {
+      const link = document.createElement('a');
+      link.href = book.pdfUrl;
+      link.download = book.samplePdfName || `${book.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Downloaded "${book.title}" PDF! Check your downloads folder.`, 'success');
+      return;
+    }
+
+    // Generate an authentic document download
+    const titleClean = book.title.replace(/[^a-zA-Z0-9]/g, '_');
+    const content = `%PDF-1.4
+%
+1 0 obj
+<< /Title (${book.title} - Xylem Learning Official Exam Guide)
+   /Author (Xylem Learning Academic Editorial Board)
+   /Subject (${book.category} Exam Preparation)
+   /Keywords (IELTS, OET, PTE, German, Mock Test, Study Guide)
+   /Creator (Xylem Learning Publishing Engine)
+>>
+endobj
+2 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595 842] /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 200 >>
+stream
+BT
+/F1 24 Tf
+50 750 Td
+(XYLEM LEARNING) Tj
+/F1 16 Tf
+0 -40 Td
+(${book.title}) Tj
+/F1 12 Tf
+0 -30 Td
+(Category: ${book.category} | Exam Edition 2026) Tj
+0 -20 Td
+(License issued to authenticated learner) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000215 00000 n 
+0000000262 00000 n 
+0000000321 00000 n 
+0000000410 00000 n 
+trailer
+<< /Size 6 /Root 2 0 R /Info 1 0 R >>
+startxref
+660
+%%EOF`;
+
+    const blob = new Blob([content], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${titleClean}_XylemLearning.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded "${book.title}" PDF! Check your downloads folder.`, 'success');
+  };
+
+  return (
+    <ShopContext.Provider
+      value={{
+        currentView,
+        setCurrentView,
+        selectedCategory,
+        setSelectedCategory,
+        selectedBookId,
+        setSelectedBookId,
+        checkoutStep,
+        setCheckoutStep,
+
+        // Catalog & Admin
+        books,
+        addBook,
+        updateBook,
+        deleteBook,
+        resetBooksToDefault,
+        testimonials,
+        addTestimonial,
+        deleteTestimonial,
+        addReview,
+
+        cart,
+        addToCart,
+        updateCartQty,
+        removeFromCart,
+        clearCart,
+        cartCount,
+        subtotal,
+        discount: couponDiscount,
+        deliveryFee,
+        total,
+
+        couponCode,
+        appliedCoupon,
+        couponDiscount,
+        applyCoupon,
+        removeCoupon,
+
+        wishlist,
+        toggleWishlist,
+        isInWishlist,
+
+        shippingInfo,
+        setShippingInfo,
+        currentOrder,
+        orders,
+        placeOrder,
+
+        isSearchOpen,
+        setIsSearchOpen,
+        searchQuery,
+        setSearchQuery,
+
+        isPdfModalOpen,
+        activePdfBook,
+        openPdfViewer,
+        closePdfViewer,
+        downloadBookPdf,
+
+        isContactModalOpen,
+        setIsContactModalOpen,
+
+        toasts,
+        showToast,
+
+        navigateToProduct,
+        navigateToCatalog,
+        openCart,
+      }}
+    >
+      {children}
+    </ShopContext.Provider>
+  );
+};
+
+export const useShop = () => {
+  const context = useContext(ShopContext);
+  if (!context) {
+    throw new Error('useShop must be used within a ShopProvider');
+  }
+  return context;
+};
