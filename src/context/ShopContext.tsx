@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial } from '../types';
 import { BOOKS } from '../data/books';
+import { TESTIMONIALS } from '../data/testimonials';
 import {
   saveCatalogToCloud,
   fetchCatalogFromCloud,
