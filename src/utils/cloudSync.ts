@@ -1,4 +1,4 @@
-import { Book } from '../types';
+import { Book, ExamPath, Testimonial } from '../types';
 
 const CLOUDINARY_CLOUD_NAME = 'gog1fpsj';
 const CLOUDINARY_API_KEY = '493453349916754';
@@ -74,25 +74,29 @@ export async function uploadImageToCloudinary(file: File, productId: string): Pr
  * with instant cache invalidation and zero-lag cross-tab broadcast.
  */
 export async function saveCatalogToCloud(
-  books: Book[]
+  books: Book[],
+  examPaths?: ExamPath[],
+  testimonials?: Testimonial[]
 ): Promise<{ success: boolean; version?: number; error?: string }> {
   const timestamp = Math.round(Date.now() / 1000);
-  const payload = {
+  const payload: any = {
     version: timestamp,
     updatedAt: new Date().toISOString(),
     count: books.length,
     books,
+    ...(examPaths ? { examPaths } : {}),
+    ...(testimonials ? { testimonials } : {}),
   };
 
   // 1. Instant 0ms broadcast to all open tabs & windows on this machine
-  broadcastLocalUpdate(books, timestamp);
+  broadcastLocalUpdate(books, timestamp, examPaths, testimonials);
 
   // 2. Try Cloudflare Pages edge endpoint /api/products
   try {
     const res = await fetch('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ books }),
+      body: JSON.stringify({ books, examPaths, testimonials }),
     });
 
     if (res.ok) {
@@ -208,6 +212,8 @@ export async function checkCatalogVersion(): Promise<number | null> {
  */
 export async function fetchCatalogFromCloud(): Promise<{
   books: Book[];
+  examPaths?: ExamPath[];
+  testimonials?: Testimonial[];
   version?: number;
   updatedAt?: string;
 } | null> {
@@ -223,6 +229,8 @@ export async function fetchCatalogFromCloud(): Promise<{
       if (data.success && Array.isArray(data.books) && data.books.length > 0) {
         return {
           books: data.books,
+          examPaths: Array.isArray(data.examPaths) ? data.examPaths : undefined,
+          testimonials: Array.isArray(data.testimonials) ? data.testimonials : undefined,
           version: data.version,
           updatedAt: data.updatedAt,
         };
@@ -244,6 +252,8 @@ export async function fetchCatalogFromCloud(): Promise<{
       if (data && Array.isArray(data.books) && data.books.length > 0) {
         return {
           books: data.books,
+          examPaths: Array.isArray(data.examPaths) ? data.examPaths : undefined,
+          testimonials: Array.isArray(data.testimonials) ? data.testimonials : undefined,
           version: data.version,
           updatedAt: data.updatedAt,
         };
@@ -259,18 +269,36 @@ export async function fetchCatalogFromCloud(): Promise<{
 /**
  * Instant multi-tab & multi-window synchronization helper using BroadcastChannel + localStorage event.
  */
-export function broadcastLocalUpdate(books: Book[], version: number) {
+export function broadcastLocalUpdate(
+  books: Book[],
+  version: number,
+  examPaths?: ExamPath[],
+  testimonials?: Testimonial[]
+) {
   if (typeof window === 'undefined') return;
 
   try {
     localStorage.setItem('xylem_books_data', JSON.stringify(books));
     localStorage.setItem('xylem_books_version', String(version));
+    if (examPaths) {
+      localStorage.setItem('xylem_exam_paths_data', JSON.stringify(examPaths));
+    }
+    if (testimonials) {
+      localStorage.setItem('xylem_testimonials_data', JSON.stringify(testimonials));
+    }
   } catch {}
 
   if ('BroadcastChannel' in window) {
     try {
       const bc = new BroadcastChannel(CHANNEL_NAME);
-      bc.postMessage({ type: 'CATALOG_UPDATED', books, version, timestamp: Date.now() });
+      bc.postMessage({
+        type: 'CATALOG_UPDATED',
+        books,
+        examPaths,
+        testimonials,
+        version,
+        timestamp: Date.now(),
+      });
       bc.close();
     } catch (e) {
       console.warn('BroadcastChannel error:', e);
@@ -282,7 +310,12 @@ export function broadcastLocalUpdate(books: Book[], version: number) {
  * Subscribes to real-time updates broadcast across tabs and windows.
  */
 export function subscribeToRealtimeBroadcast(
-  onUpdate: (books: Book[], version: number) => void
+  onUpdate: (
+    books: Book[],
+    version: number,
+    examPaths?: ExamPath[],
+    testimonials?: Testimonial[]
+  ) => void
 ): () => void {
   if (typeof window === 'undefined') {
     return () => {};
@@ -296,7 +329,12 @@ export function subscribeToRealtimeBroadcast(
       const bc = new BroadcastChannel(CHANNEL_NAME);
       bc.onmessage = (event) => {
         if (event.data && event.data.type === 'CATALOG_UPDATED' && Array.isArray(event.data.books)) {
-          onUpdate(event.data.books, event.data.version || Date.now());
+          onUpdate(
+            event.data.books,
+            event.data.version || Date.now(),
+            Array.isArray(event.data.examPaths) ? event.data.examPaths : undefined,
+            Array.isArray(event.data.testimonials) ? event.data.testimonials : undefined
+          );
         }
       };
       cleanups.push(() => bc.close());
@@ -307,12 +345,23 @@ export function subscribeToRealtimeBroadcast(
 
   // 2. Storage event listener (fires instantly when another tab changes localStorage)
   const onStorage = (e: StorageEvent) => {
-    if (e.key === 'xylem_books_data' && e.newValue) {
+    if (
+      (e.key === 'xylem_books_data' ||
+        e.key === 'xylem_exam_paths_data' ||
+        e.key === 'xylem_testimonials_data') &&
+      e.newValue
+    ) {
       try {
-        const parsed = JSON.parse(e.newValue);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        const rawBooks = localStorage.getItem('xylem_books_data');
+        const parsedBooks = rawBooks ? JSON.parse(rawBooks) : [];
+        const rawPaths = localStorage.getItem('xylem_exam_paths_data');
+        const parsedPaths = rawPaths ? JSON.parse(rawPaths) : undefined;
+        const rawTestis = localStorage.getItem('xylem_testimonials_data');
+        const parsedTestis = rawTestis ? JSON.parse(rawTestis) : undefined;
+
+        if (Array.isArray(parsedBooks) && parsedBooks.length > 0) {
           const v = Number(localStorage.getItem('xylem_books_version')) || Date.now();
-          onUpdate(parsed, v);
+          onUpdate(parsedBooks, v, parsedPaths, parsedTestis);
         }
       } catch {}
     }

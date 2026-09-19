@@ -95,19 +95,21 @@ export async function onRequestPost(context) {
     const payload = await request.json();
     let books = payload.books;
 
+    let currentCatalog = null;
+    if (env && env.PRODUCTS_KV) {
+      try {
+        currentCatalog = await env.PRODUCTS_KV.get('xylem_products', { type: 'json' });
+      } catch {}
+    }
+    if (!currentCatalog) {
+      try {
+        const cRes = await fetch(`https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`, { cache: 'no-store' });
+        if (cRes.ok) currentCatalog = await cRes.json();
+      } catch {}
+    }
+
     // Handle single-product image update action directly
     if (payload.action === 'update-product-image' && payload.productId && payload.imageUrl) {
-      let currentCatalog = null;
-      if (env && env.PRODUCTS_KV) {
-        currentCatalog = await env.PRODUCTS_KV.get('xylem_products', { type: 'json' });
-      }
-      if (!currentCatalog || !Array.isArray(currentCatalog.books)) {
-        try {
-          const cRes = await fetch(`https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`, { cache: 'no-store' });
-          if (cRes.ok) currentCatalog = await cRes.json();
-        } catch {}
-      }
-
       const existingBooks = (currentCatalog && Array.isArray(currentCatalog.books)) ? currentCatalog.books : [];
       const prodId = payload.productId.trim();
       const idx = existingBooks.findIndex(b => b.id === prodId || (b.title && b.title.toLowerCase().includes(prodId.toLowerCase())));
@@ -146,8 +148,11 @@ export async function onRequestPost(context) {
     }
 
     if (!Array.isArray(books)) {
-      books = [];
+      books = (currentCatalog && Array.isArray(currentCatalog.books)) ? currentCatalog.books : [];
     }
+
+    const examPaths = Array.isArray(payload.examPaths) ? payload.examPaths : currentCatalog?.examPaths;
+    const testimonials = Array.isArray(payload.testimonials) ? payload.testimonials : currentCatalog?.testimonials;
 
     const timestamp = Math.round(Date.now() / 1000);
     const updatedCatalog = {
@@ -155,6 +160,8 @@ export async function onRequestPost(context) {
       updatedAt: new Date().toISOString(),
       count: books.length,
       books,
+      ...(examPaths ? { examPaths } : {}),
+      ...(testimonials ? { testimonials } : {}),
     };
 
     // 1. If Cloudflare KV is bound:

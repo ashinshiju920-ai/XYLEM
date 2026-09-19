@@ -37,9 +37,40 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { Book, ExamCategory, BookFormat, Testimonial, Review } from '../types';
+import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath } from '../types';
 import { BookCover } from '../components/BookCover';
 import { uploadImageToCloudinary } from '../utils/cloudSync';
+
+const EXAM_IMAGE_PRESETS: { [key in ExamCategory]?: { label: string; url: string }[] } = {
+  IELTS: [
+    { label: 'Big Ben & London (Default)', url: '/images/exams/ielts.jpg' },
+    { label: 'Tower Bridge & Thames', url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&q=80&w=1200' },
+    { label: 'London Westminster', url: 'https://images.unsplash.com/photo-1529655683826-aba9b3e77383?auto=format&fit=crop&q=80&w=1200' },
+  ],
+  OET: [
+    { label: 'Hospital Corridor (Default)', url: '/images/exams/oet.jpg' },
+    { label: 'Medical Consultation Clinic', url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=1200' },
+    { label: 'Healthcare & Stethoscope', url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=1200' },
+  ],
+  PTE: [
+    { label: 'Skyline & Jetliner (Default)', url: '/images/exams/pte.jpg' },
+    { label: 'Modern Metro Skyline', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1200' },
+    { label: 'Global Airport & Horizons', url: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&q=80&w=1200' },
+  ],
+  German: [
+    { label: 'Berlin Cathedral (Default)', url: '/images/exams/german.jpg' },
+    { label: 'Brandenburg Gate Berlin', url: 'https://images.unsplash.com/photo-1560969184-10fe8719e047?auto=format&fit=crop&q=80&w=1200' },
+    { label: 'German Historic Castle', url: 'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&q=80&w=1200' },
+  ],
+};
+
+const AVATAR_PRESETS = [
+  { label: 'Professional Woman (Anjana)', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80' },
+  { label: 'Doctor / Nurse (Rohith)', url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&auto=format&fit=crop&q=80' },
+  { label: 'Young Professional (Sneha)', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80' },
+  { label: 'Confident Scholar', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
+  { label: 'International Student', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' },
+];
 
 export const AdminView: React.FC = () => {
   const {
@@ -51,9 +82,14 @@ export const AdminView: React.FC = () => {
     reorderBooks,
     moveBookOrder,
     setBookOrderPosition,
+    examPaths,
+    updateExamPath,
+    resetExamPathsToDefault,
     testimonials,
     addTestimonial,
+    updateTestimonial,
     deleteTestimonial,
+    resetTestimonialsToDefault,
     addReview,
     orders,
     openPdfViewer,
@@ -66,7 +102,7 @@ export const AdminView: React.FC = () => {
     syncBooksToCloud,
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'arrange' | 'pdfs' | 'reviews' | 'orders'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'arrange' | 'homepage_images' | 'pdfs' | 'reviews' | 'orders'>('overview');
 
   // Products filter
   const [productCategoryFilter, setProductCategoryFilter] = useState<ExamCategory | 'All'>('All');
@@ -544,6 +580,72 @@ export const AdminView: React.FC = () => {
     showToast('Student testimonial published to homepage!', 'success');
   };
 
+  // Homepage Images & Content Customization State (Image 1 & Image 2)
+  const [homeVisualsSubTab, setHomeVisualsSubTab] = useState<'exam_cards' | 'testimonials'>('exam_cards');
+  const [uploadingCategory, setUploadingCategory] = useState<ExamCategory | null>(null);
+  const [uploadingTestimonialId, setUploadingTestimonialId] = useState<string | null>(null);
+  const [customPathUrls, setCustomPathUrls] = useState<{ [key: string]: string }>({});
+  const [customAvatarUrls, setCustomAvatarUrls] = useState<{ [key: string]: string }>({});
+
+  // New Testimonial inline creator state
+  const [newTestiName, setNewTestiName] = useState('');
+  const [newTestiRole, setNewTestiRole] = useState('');
+  const [newTestiQuote, setNewTestiQuote] = useState('');
+  const [newTestiAvatar, setNewTestiAvatar] = useState('');
+  const [newTestiRating, setNewTestiRating] = useState(5);
+  const [isAddingNewTestimonial, setIsAddingNewTestimonial] = useState(false);
+
+  // Refs for file uploads
+  const examFileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const testiFileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const newTestiFileRef = useRef<HTMLInputElement | null>(null);
+
+  // Upload handler for Exam Path Background Image (Image 1)
+  const handleExamPathImageUpload = async (cat: ExamCategory, file: File) => {
+    setUploadingCategory(cat);
+    try {
+      showToast(`Uploading ${cat} background to Cloudinary...`, 'info');
+      const uploadedUrl = await uploadImageToCloudinary(file, `exam_${cat.toLowerCase()}`);
+      updateExamPath(cat, { bgImage: uploadedUrl });
+      showToast(`${cat} background image uploaded & synced in real-time!`, 'success');
+    } catch (err: any) {
+      console.warn('Cloudinary upload error, using direct FileReader fallback:', err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          updateExamPath(cat, { bgImage: reader.result });
+          showToast(`${cat} image saved and synced!`, 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingCategory(null);
+    }
+  };
+
+  // Upload handler for Student Avatar Photo (Image 2)
+  const handleTestimonialAvatarUpload = async (testiId: string, file: File) => {
+    setUploadingTestimonialId(testiId);
+    try {
+      showToast('Uploading student photo to Cloudinary...', 'info');
+      const uploadedUrl = await uploadImageToCloudinary(file, `student_${testiId}`);
+      updateTestimonial(testiId, { avatar: uploadedUrl });
+      showToast('Student avatar updated & synced in real-time!', 'success');
+    } catch (err: any) {
+      console.warn('Cloudinary upload error, using direct FileReader fallback:', err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          updateTestimonial(testiId, { avatar: reader.result });
+          showToast('Student avatar updated and synced!', 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingTestimonialId(null);
+    }
+  };
+
   // Filtered books
   const filteredBooks = books.filter((b) => {
     const matchesCategory = productCategoryFilter === 'All' || b.category === productCategoryFilter;
@@ -604,6 +706,7 @@ export const AdminView: React.FC = () => {
               { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
               { id: 'products', label: `Products & Books (${books.length})`, icon: BookOpen },
               { id: 'arrange', label: 'Arrange Homepage Order', icon: ArrowUpDown },
+              { id: 'homepage_images', label: 'Homepage Images & Cards', icon: ImageIcon },
               { id: 'pdfs', label: `PDF Manager (${totalPdfs})`, icon: FileText },
               { id: 'reviews', label: `Reviews & Testimonials (${totalReviewsCount})`, icon: Star },
               { id: 'orders', label: `Orders (${orders.length})`, icon: ShoppingBag },
@@ -1279,7 +1382,766 @@ export const AdminView: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 3: PDF & SAMPLE UPLOADER
+            TAB 4: HOMEPAGE IMAGES & CARDS CUSTOMIZER (Image 1 & Image 2)
+            ========================================================================= */}
+        {activeTab === 'homepage_images' && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Top Header Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] uppercase font-bold tracking-widest bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                    Live Storefront Customizer
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Real-Time Sync Active</span>
+                  </div>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
+                  Homepage Images &amp; Content Customizer
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                  Directly customize the 4 Primary Exam Category Cards (IELTS, OET, PTE, German) and Student Testimonial Photos. Changes are published instantly to all visitors via Cloudflare Edge KV and Cloudinary CDN.
+                </p>
+              </div>
+
+              {/* Top Quick Actions */}
+              <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetExamPathsToDefault();
+                    resetTestimonialsToDefault();
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Reset both exam cards and testimonials to factory defaults"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Restore Factory Defaults</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => syncBooksToCloud()}
+                  disabled={isCloudSyncing}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#00875a] hover:bg-[#00734c] shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {isCloudSyncing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Syncing Cloud...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Radio className="w-3.5 h-3.5 animate-pulse" />
+                      <span>Force Cloud Sync</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Subtab Switcher: Exam Path Cards vs Student Testimonials */}
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <button
+                type="button"
+                onClick={() => setHomeVisualsSubTab('exam_cards')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  homeVisualsSubTab === 'exam_cards'
+                    ? 'bg-[#0a2540] text-white shadow-sm'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>Primary Exam Cards ({examPaths.length})</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
+                  Image 1
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHomeVisualsSubTab('testimonials')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  homeVisualsSubTab === 'testimonials'
+                    ? 'bg-[#0a2540] text-white shadow-sm'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>Student Testimonials &amp; Avatars ({testimonials.length})</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
+                  Image 2
+                </span>
+              </button>
+            </div>
+
+            {/* SUBTAB 1: 4 EXAM PATH CARDS (IELTS, OET, PTE, German) */}
+            {homeVisualsSubTab === 'exam_cards' && (
+              <div className="space-y-6">
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs text-emerald-900 leading-relaxed">
+                    <span className="font-bold">Live Visual Customization:</span> Below are the 4 primary exam cards shown in the <em>"Choose Your Exam - Select Your Path"</em> section on the homepage. You can upload custom high-resolution backgrounds, change badges, and update calligraphic cursive script words.
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                  {examPaths.map((path) => {
+                    const presets = EXAM_IMAGE_PRESETS[path.category] || [];
+                    const isUploading = uploadingCategory === path.category;
+
+                    return (
+                      <div
+                        key={path.category}
+                        className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden flex flex-col justify-between"
+                      >
+                        {/* Card Header */}
+                        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-8 h-8 rounded-xl bg-[#0a2540] text-white font-black text-xs flex items-center justify-center">
+                              {path.badgeText || path.category.slice(0, 2)}
+                            </span>
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-base font-['Plus_Jakarta_Sans',sans-serif]">
+                                {path.category} Exam Card
+                              </h4>
+                              <p className="text-[11px] text-slate-500">Live homepage category hero card</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            Category: {path.category}
+                          </span>
+                        </div>
+
+                        {/* Split: Left Live Preview | Right Controls */}
+                        <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+                          {/* Live 1:1 Card Mockup (Exact Match from Storefront) */}
+                          <div className="md:col-span-5 flex flex-col items-center">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                              Live Homepage Preview
+                            </span>
+                            <div className="relative w-full max-w-[220px] h-72 rounded-[22px] overflow-hidden shadow-md border border-slate-200 flex flex-col justify-between select-none">
+                              {/* Background Image */}
+                              <img
+                                src={path.bgImage}
+                                alt={path.title}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+
+                              {/* Navy Gradient */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#061e38] via-[#061e38]/70 via-45% to-transparent" />
+
+                              {/* Top Badge & Script */}
+                              <div className="relative z-10 p-3.5 flex items-start justify-between">
+                                {path.isMedicalCross ? (
+                                  <div className="w-8 h-8 rounded-full bg-[#00875a] text-white flex items-center justify-center font-bold text-lg shadow-md border border-white/25 leading-none">
+                                    +
+                                  </div>
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-[#071d36]/90 backdrop-blur-md border border-white/20 text-white font-extrabold text-[10px] flex items-center justify-center shadow-md tracking-wider">
+                                    {path.badgeText || path.category.slice(0, 2)}
+                                  </div>
+                                )}
+
+                                <div className="font-script text-sm font-bold text-[#00875a] leading-[1.05] text-right transform -rotate-3 select-none drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)]">
+                                  {path.scriptWords.map((word, i) => (
+                                    <div key={i}>{word}</div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Arc */}
+                              <div className="absolute left-0 bottom-14 w-16 h-16 pointer-events-none opacity-80">
+                                <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
+                                  <path
+                                    d="M 2 74 C 6 36, 28 14, 66 6"
+                                    stroke="#00a375"
+                                    strokeWidth="4"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              </div>
+
+                              {/* Bottom Title & Button */}
+                              <div className="relative z-10 p-3.5 flex items-end justify-between">
+                                <div>
+                                  <h3 className="text-xl font-extrabold text-white tracking-tight leading-tight">
+                                    {path.title}
+                                  </h3>
+                                  <p className="text-[10px] text-slate-300 font-normal leading-snug line-clamp-2 mt-0.5">
+                                    {path.description}
+                                  </p>
+                                </div>
+                                <div className="w-7 h-7 rounded-full bg-[#00a375] text-white flex items-center justify-center shadow-md shrink-0 ml-2">
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Controls & Inputs */}
+                          <div className="md:col-span-7 space-y-4">
+                            {/* Image Source & Upload */}
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                                <span>Background Landmark Photo</span>
+                                <span className="text-[10px] text-slate-400 font-normal">HD JPG/PNG</span>
+                              </label>
+
+                              {/* Upload Button */}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  ref={(el) => {
+                                    examFileInputRefs.current[path.category] = el;
+                                  }}
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                      handleExamPathImageUpload(path.category, e.target.files[0]);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+
+                                <button
+                                  type="button"
+                                  disabled={isUploading}
+                                  onClick={() => examFileInputRefs.current[path.category]?.click()}
+                                  className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {isUploading ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Uploading to Cloud...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="w-3.5 h-3.5" />
+                                      <span>Upload Custom Image</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Paste Image URL */}
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <input
+                                  type="url"
+                                  placeholder="Or paste external image URL..."
+                                  value={customPathUrls[path.category] || ''}
+                                  onChange={(e) =>
+                                    setCustomPathUrls({ ...customPathUrls, [path.category]: e.target.value })
+                                  }
+                                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const url = (customPathUrls[path.category] || '').trim();
+                                    if (url) {
+                                      updateExamPath(path.category, { bgImage: url });
+                                      setCustomPathUrls({ ...customPathUrls, [path.category]: '' });
+                                    } else {
+                                      showToast('Please enter an image URL first', 'warning');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+
+                              {/* Presets List */}
+                              {presets.length > 0 && (
+                                <div className="pt-1">
+                                  <span className="text-[10px] font-bold text-slate-400 block mb-1">
+                                    Quick Curated Presets:
+                                  </span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {presets.map((preset, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => updateExamPath(path.category, { bgImage: preset.url })}
+                                        className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                                          path.bgImage === preset.url
+                                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 ring-1 ring-emerald-400'
+                                            : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                                        }`}
+                                      >
+                                        {preset.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Card Content & Badge Inputs */}
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                              <div>
+                                <label className="text-[11px] font-bold text-slate-700">Card Title</label>
+                                <input
+                                  type="text"
+                                  value={path.title}
+                                  onChange={(e) => updateExamPath(path.category, { title: e.target.value })}
+                                  className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white font-bold"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[11px] font-bold text-slate-700">Badge Text</label>
+                                <input
+                                  type="text"
+                                  value={path.badgeText || ''}
+                                  onChange={(e) => updateExamPath(path.category, { badgeText: e.target.value })}
+                                  placeholder="e.g. GB, DE, PTE"
+                                  className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-bold text-slate-700">Card Tagline / Description</label>
+                              <input
+                                type="text"
+                                value={path.description}
+                                onChange={(e) => updateExamPath(path.category, { description: e.target.value })}
+                                className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                              />
+                            </div>
+
+                            {/* Script Words */}
+                            <div>
+                              <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                                <span>Cursive Script Words</span>
+                                <span className="text-[10px] text-slate-400 font-normal">Comma-separated</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={path.scriptWords.join(', ')}
+                                onChange={(e) => {
+                                  const words = e.target.value
+                                    .split(',')
+                                    .map((w) => w.trim())
+                                    .filter(Boolean);
+                                  updateExamPath(path.category, { scriptWords: words });
+                                }}
+                                placeholder="e.g. Study, Work, Settle"
+                                className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                              />
+                            </div>
+
+                            {/* Medical Cross Toggle (for OET) */}
+                            <label className="flex items-center gap-2 pt-1 text-xs font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!!path.isMedicalCross}
+                                onChange={(e) => updateExamPath(path.category, { isMedicalCross: e.target.checked })}
+                                className="rounded text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span>Use Medical Cross Badge (+)</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 2: STUDENT TESTIMONIALS & AVATARS (Image 2) */}
+            {homeVisualsSubTab === 'testimonials' && (
+              <div className="space-y-6">
+                <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs text-blue-900 leading-relaxed">
+                      <span className="font-bold">Student Testimonials &amp; Profile Photos:</span> Customize the learner photos, names, exam scores, and quotes shown in the <em>"What Our Learners Say"</em> homepage section (Anjana Suresh, Rohith Mathew, Sneha Thomas).
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNewTestimonial(true)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add New Testimonial</span>
+                  </button>
+                </div>
+
+                {/* Inline New Testimonial Creator Modal/Drawer */}
+                {isAddingNewTestimonial && (
+                  <div className="bg-white rounded-3xl border-2 border-emerald-500/40 p-6 shadow-md space-y-4 animate-in fade-in">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <h4 className="font-bold text-slate-900 text-sm font-['Plus_Jakarta_Sans',sans-serif]">
+                        Create New Homepage Student Testimonial
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewTestimonial(false)}
+                        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700">Student Full Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Diya Sharma"
+                          value={newTestiName}
+                          onChange={(e) => setNewTestiName(e.target.value)}
+                          className="w-full mt-1 px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700">Role / Exam Score</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. IELTS | 8.0 Bands"
+                          value={newTestiRole}
+                          onChange={(e) => setNewTestiRole(e.target.value)}
+                          className="w-full mt-1 px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700">Rating (1 to 5 Stars)</label>
+                        <div className="flex items-center gap-1 mt-2">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setNewTestiRating(s)}
+                              className="text-amber-400 hover:scale-110 transition-transform cursor-pointer"
+                            >
+                              <Star
+                                className={`w-5 h-5 ${
+                                  s <= newTestiRating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Avatar Upload */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700">Student Avatar Photo</label>
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full border-2 border-emerald-500 overflow-hidden bg-slate-100 shrink-0 flex items-center justify-center">
+                          {newTestiAvatar ? (
+                            <img src={newTestiAvatar} alt="Avatar preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <Users className="w-5 h-5 text-slate-400" />
+                          )}
+                        </div>
+
+                        <div className="flex-1 flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={newTestiFileRef}
+                            onChange={async (e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                try {
+                                  const url = await uploadImageToCloudinary(e.target.files[0], 'new_testi');
+                                  setNewTestiAvatar(url);
+                                } catch {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    if (typeof reader.result === 'string') setNewTestiAvatar(reader.result);
+                                  };
+                                  reader.readAsDataURL(e.target.files[0]);
+                                }
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => newTestiFileRef.current?.click()}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload Photo</span>
+                          </button>
+
+                          <input
+                            type="url"
+                            placeholder="Or paste photo URL"
+                            value={newTestiAvatar}
+                            onChange={(e) => setNewTestiAvatar(e.target.value)}
+                            className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Quick Presets for new testimonial */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {AVATAR_PRESETS.map((p, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setNewTestiAvatar(p.url)}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer"
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700">Testimonial Quote</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Write student feedback and score achievement..."
+                        value={newTestiQuote}
+                        onChange={(e) => setNewTestiQuote(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewTestimonial(false)}
+                        className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newTestiName.trim() || !newTestiQuote.trim()) {
+                            showToast('Please enter student name and quote', 'warning');
+                            return;
+                          }
+                          addTestimonial({
+                            name: newTestiName.trim(),
+                            role: newTestiRole.trim() || 'Student Aspirant',
+                            avatar:
+                              newTestiAvatar.trim() ||
+                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+                            quote: newTestiQuote.trim(),
+                            rating: newTestiRating,
+                          });
+                          setNewTestiName('');
+                          setNewTestiRole('');
+                          setNewTestiQuote('');
+                          setNewTestiAvatar('');
+                          setIsAddingNewTestimonial(false);
+                        }}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+                      >
+                        Publish &amp; Sync to Homepage
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Existing Testimonials Cards Grid (Image 2) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {testimonials.map((testi) => {
+                    const isUploading = uploadingTestimonialId === testi.id;
+
+                    return (
+                      <div
+                        key={testi.id}
+                        className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-6 flex flex-col justify-between space-y-4 relative group"
+                      >
+                        {/* Top: Avatar & Photo Actions */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3.5">
+                            {/* Avatar Circle with Live Upload overlay */}
+                            <div className="relative w-16 h-16 rounded-full border-2 border-emerald-500 overflow-hidden bg-slate-100 shadow-sm shrink-0">
+                              <img
+                                src={testi.avatar}
+                                alt={testi.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                              {isUploading && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white">
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                  Homepage Card
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTestimonial(testi.id)}
+                                  className="p-1 text-slate-300 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="Delete testimonial"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Photo Change Buttons */}
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  ref={(el) => {
+                                    testiFileInputRefs.current[testi.id] = el;
+                                  }}
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                      handleTestimonialAvatarUpload(testi.id, e.target.files[0]);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isUploading}
+                                  onClick={() => testiFileInputRefs.current[testi.id]?.click()}
+                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Upload className="w-3 h-3" />
+                                  <span>Change Photo</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick URL Input for Photo */}
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="url"
+                              placeholder="Or paste photo URL..."
+                              value={customAvatarUrls[testi.id] || ''}
+                              onChange={(e) =>
+                                setCustomAvatarUrls({ ...customAvatarUrls, [testi.id]: e.target.value })
+                              }
+                              className="flex-1 px-2.5 py-1 text-[11px] rounded-lg border border-slate-200 bg-slate-50 focus:bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = (customAvatarUrls[testi.id] || '').trim();
+                                if (url) {
+                                  updateTestimonial(testi.id, { avatar: url });
+                                  setCustomAvatarUrls({ ...customAvatarUrls, [testi.id]: '' });
+                                } else {
+                                  showToast('Please enter an avatar URL first', 'warning');
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                            >
+                              Apply
+                            </button>
+                          </div>
+
+                          {/* Avatar Presets */}
+                          <div className="flex flex-wrap gap-1">
+                            {AVATAR_PRESETS.slice(0, 3).map((p, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => updateTestimonial(testi.id, { avatar: p.url })}
+                                className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 cursor-pointer"
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Editable Fields */}
+                          <div className="space-y-2 pt-2 border-t border-slate-100">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600">Student Name</label>
+                              <input
+                                type="text"
+                                value={testi.name}
+                                onChange={(e) => updateTestimonial(testi.id, { name: e.target.value })}
+                                className="w-full mt-0.5 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-slate-50 focus:bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600">Role / Exam Score</label>
+                              <input
+                                type="text"
+                                value={testi.role}
+                                onChange={(e) => updateTestimonial(testi.id, { role: e.target.value })}
+                                className="w-full mt-0.5 px-2.5 py-1.5 text-xs text-emerald-700 font-semibold rounded-lg border border-slate-200 bg-slate-50 focus:bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600">Rating Stars</label>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => updateTestimonial(testi.id, { rating: star })}
+                                    className="text-amber-400 hover:scale-110 transition-transform p-0.5 cursor-pointer"
+                                  >
+                                    <Star
+                                      className={`w-4 h-4 ${
+                                        star <= testi.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                                      }`}
+                                    />
+                                  </button>
+                                ))}
+                                <span className="text-[11px] font-bold text-slate-700 ml-1">
+                                  {testi.rating}.0
+                                </span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600">Testimonial Quote</label>
+                              <textarea
+                                rows={3}
+                                value={testi.quote}
+                                onChange={(e) => updateTestimonial(testi.id, { quote: e.target.value })}
+                                className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white italic leading-relaxed"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Footer */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Synced in Real Time
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 5: PDF & SAMPLE UPLOADER
             ========================================================================= */}
         {activeTab === 'pdfs' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-200">

@@ -105,3 +105,14 @@ export interface Testimonial {
   quote: string;
   rating: number;
 }
+
+export interface ExamPath {
+  category: ExamCategory;
+  title: string;
+  description: string;
+  bgImage: string;
+  badgeText?: string;
+  isMedicalCross?: boolean;
+  scriptWords: string[];
+}
+

@@ -21,6 +21,7 @@ import { ExamCategory, Book } from '../types';
 export const HomeView: React.FC = () => {
   const {
     books,
+    examPaths,
     testimonials,
     navigateToProduct,
     navigateToCatalog,
@@ -32,49 +33,6 @@ export const HomeView: React.FC = () => {
   // Featured books dynamically respect the admin's custom arrangement
   const featuredBooks = (books && books.length > 0 ? books.slice(0, 5) : []).filter(Boolean);
 
-  // 4 Primary Exam Paths matching new reference design
-  const examPaths: {
-    category: ExamCategory;
-    title: string;
-    description: string;
-    bgImage: string;
-    badgeText?: string;
-    isMedicalCross?: boolean;
-    scriptWords: string[];
-  }[] = [
-    {
-      category: 'IELTS',
-      title: 'IELTS',
-      description: 'Build your skills. Get your bands.',
-      bgImage: '/images/exams/ielts.jpg',
-      badgeText: 'GB',
-      scriptWords: ['Study', 'Work', 'Settle'],
-    },
-    {
-      category: 'OET',
-      title: 'OET',
-      description: 'Your career in healthcare, starts here.',
-      bgImage: '/images/exams/oet.jpg',
-      isMedicalCross: true,
-      scriptWords: ['Care', 'Connect', 'Grow'],
-    },
-    {
-      category: 'PTE',
-      title: 'PTE',
-      description: 'Prove your English. Open global opportunities.',
-      bgImage: '/images/exams/pte.jpg',
-      badgeText: 'PTE',
-      scriptWords: ['Global', 'Career', 'Ahead'],
-    },
-    {
-      category: 'German',
-      title: 'German',
-      description: 'Learn German. Expand your world.',
-      bgImage: '/images/exams/german.jpg',
-      badgeText: 'DE',
-      scriptWords: ['Learn', 'Explore', 'Belong'],
-    },
-  ];
 
   return (
     <div className="space-y-12 sm:space-y-24">

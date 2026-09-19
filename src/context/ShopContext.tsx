@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial } from '../types';
+import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial, ExamPath } from '../types';
 import { BOOKS } from '../data/books';
 import { TESTIMONIALS } from '../data/testimonials';
+import { DEFAULT_EXAM_PATHS } from '../data/examPaths';
 import {
   saveCatalogToCloud,
   fetchCatalogFromCloud,
@@ -42,10 +43,17 @@ interface ShopContextType {
   refreshProductsFromCloud: () => Promise<void>;
   syncBooksToCloud: (booksToSync?: Book[]) => Promise<void>;
 
-  // Testimonials & Reviews
+  // Exam Paths (Image 1 - Hero & Homepage Category Cards)
+  examPaths: ExamPath[];
+  updateExamPath: (category: ExamCategory, updated: Partial<ExamPath>) => void;
+  resetExamPathsToDefault: () => void;
+
+  // Testimonials & Reviews (Image 2 - Learner Avatars & Quotes)
   testimonials: Testimonial[];
   addTestimonial: (testimonial: Omit<Testimonial, 'id'>) => void;
+  updateTestimonial: (id: string, updated: Partial<Testimonial>) => void;
   deleteTestimonial: (id: string) => void;
+  resetTestimonialsToDefault: () => void;
   addReview: (bookId: string, review: Omit<Review, 'id' | 'date'>) => void;
 
   // Cart
@@ -150,6 +158,50 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [books]);
 
+  // Persistent Exam Paths State (Image 1 - IELTS, OET, PTE, German)
+  const [examPaths, setExamPaths] = useState<ExamPath[]>(() => {
+    try {
+      const saved = localStorage.getItem('xylem_exam_paths_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load exam paths from storage:', e);
+    }
+    return DEFAULT_EXAM_PATHS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xylem_exam_paths_data', JSON.stringify(examPaths));
+    } catch (e) {
+      console.error('Failed to save exam paths to storage:', e);
+    }
+  }, [examPaths]);
+
+  // Persistent Testimonials State (Image 2 - Anjana, Rohith, Sneha, etc.)
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    try {
+      const saved = localStorage.getItem('xylem_testimonials_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load testimonials from storage:', e);
+    }
+    return TESTIMONIALS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xylem_testimonials_data', JSON.stringify(testimonials));
+    } catch (e) {
+      console.error('Failed to save testimonials to storage:', e);
+    }
+  }, [testimonials]);
+
   // Real-time Cloud Synchronization State
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [lastCloudSync, setLastCloudSync] = useState<Date | null>(null);
@@ -163,10 +215,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, []);
 
-  const triggerCloudSync = async (booksToSync: Book[]) => {
+  const triggerCloudSync = async (
+    booksToSync: Book[],
+    pathsToSync?: ExamPath[],
+    testisToSync?: Testimonial[]
+  ) => {
     setIsCloudSyncing(true);
     try {
-      const res = await saveCatalogToCloud(booksToSync);
+      const paths = pathsToSync || examPaths;
+      const testis = testisToSync || testimonials;
+      const res = await saveCatalogToCloud(booksToSync, paths, testis);
       if (res.success) {
         if (res.version) localCatalogVersionRef.current = res.version;
         setLastCloudSync(new Date());
@@ -202,6 +260,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (force || remoteVersion > localCatalogVersionRef.current) {
           localCatalogVersionRef.current = remoteVersion;
           setBooks(remote.books);
+          if (Array.isArray(remote.examPaths) && remote.examPaths.length > 0) {
+            setExamPaths(remote.examPaths);
+            try {
+              localStorage.setItem('xylem_exam_paths_data', JSON.stringify(remote.examPaths));
+            } catch {}
+          }
+          if (Array.isArray(remote.testimonials) && remote.testimonials.length > 0) {
+            setTestimonials(remote.testimonials);
+            try {
+              localStorage.setItem('xylem_testimonials_data', JSON.stringify(remote.testimonials));
+            } catch {}
+          }
           setLastCloudSync(new Date());
           try {
             localStorage.setItem('xylem_books_data', JSON.stringify(remote.books));
@@ -225,9 +295,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     refreshProductsFromCloud(true);
 
-    const unsubscribe = subscribeToRealtimeBroadcast((newBooks, version) => {
+    const unsubscribe = subscribeToRealtimeBroadcast((newBooks, version, newPaths, newTestis) => {
       localCatalogVersionRef.current = version;
       setBooks(newBooks);
+      if (newPaths && Array.isArray(newPaths)) {
+        setExamPaths(newPaths);
+      }
+      if (newTestis && Array.isArray(newTestis)) {
+        setTestimonials(newTestis);
+      }
       setLastCloudSync(new Date());
     });
 
@@ -262,28 +338,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('pointerdown', onUserInteraction);
     };
   }, []);
-
-  // Persistent Testimonials State
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
-    try {
-      const saved = localStorage.getItem('xylem_testimonials_data');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to load testimonials from storage:', e);
-    }
-    return TESTIMONIALS;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('xylem_testimonials_data', JSON.stringify(testimonials));
-    } catch (e) {
-      console.error('Failed to save testimonials to storage:', e);
-    }
-  }, [testimonials]);
 
   // Cart state initialized with 1 default item (IELTS Full Preparation Digital) matching the mockup!
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -580,18 +634,50 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showToast(`Product moved to position #${targetPosition} & synced live!`, 'success');
   };
 
+  // Exam Paths management (Image 1)
+  const updateExamPath = (category: ExamCategory, updated: Partial<ExamPath>) => {
+    const nextPaths = examPaths.map((p) => (p.category === category ? { ...p, ...updated } : p));
+    setExamPaths(nextPaths);
+    triggerCloudSync(books, nextPaths, testimonials);
+    showToast(`Updated ${category} card image & content! Synced live.`, 'success');
+  };
+
+  const resetExamPathsToDefault = () => {
+    setExamPaths(DEFAULT_EXAM_PATHS);
+    triggerCloudSync(books, DEFAULT_EXAM_PATHS, testimonials);
+    showToast('Reset homepage exam path cards to default.', 'info');
+  };
+
+  // Testimonials management (Image 2)
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
     const newTestimonial: Testimonial = {
       ...item,
       id: `test-${Date.now()}`,
     };
-    setTestimonials((prev) => [newTestimonial, ...prev]);
-    showToast('Student testimonial published!', 'success');
+    const nextTestis = [newTestimonial, ...testimonials];
+    setTestimonials(nextTestis);
+    triggerCloudSync(books, examPaths, nextTestis);
+    showToast('Student testimonial published & synced live!', 'success');
+  };
+
+  const updateTestimonial = (id: string, updated: Partial<Testimonial>) => {
+    const nextTestis = testimonials.map((t) => (t.id === id ? { ...t, ...updated } : t));
+    setTestimonials(nextTestis);
+    triggerCloudSync(books, examPaths, nextTestis);
+    showToast('Student testimonial updated & synced live!', 'success');
   };
 
   const deleteTestimonial = (id: string) => {
-    setTestimonials((prev) => prev.filter((t) => t.id !== id));
-    showToast('Testimonial removed', 'info');
+    const nextTestis = testimonials.filter((t) => t.id !== id);
+    setTestimonials(nextTestis);
+    triggerCloudSync(books, examPaths, nextTestis);
+    showToast('Testimonial removed & synced live', 'info');
+  };
+
+  const resetTestimonialsToDefault = () => {
+    setTestimonials(TESTIMONIALS);
+    triggerCloudSync(books, examPaths, TESTIMONIALS);
+    showToast('Reset student testimonials to default.', 'info');
   };
 
   const addReview = (bookId: string, reviewData: Omit<Review, 'id' | 'date'>) => {
@@ -720,9 +806,18 @@ startxref
         reorderBooks,
         moveBookOrder,
         setBookOrderPosition,
+
+        // Exam Paths (Image 1)
+        examPaths,
+        updateExamPath,
+        resetExamPathsToDefault,
+
+        // Testimonials (Image 2)
         testimonials,
         addTestimonial,
+        updateTestimonial,
         deleteTestimonial,
+        resetTestimonialsToDefault,
         addReview,
 
         cart,
