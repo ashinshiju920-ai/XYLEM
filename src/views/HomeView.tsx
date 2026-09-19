@@ -38,41 +38,47 @@ export const HomeView: React.FC = () => {
     books.find((b) => b.id === 'academic-study-planner') || books[4] || books[0],
   ].filter(Boolean) as Book[];
 
-  // 4 Primary Exam Paths from Image 5
+  // 4 Primary Exam Paths matching new reference design
   const examPaths: {
     category: ExamCategory;
     title: string;
     description: string;
     bgImage: string;
-    flag: string;
+    badgeText?: string;
+    isMedicalCross?: boolean;
+    scriptWords: string[];
   }[] = [
     {
       category: 'IELTS',
       title: 'IELTS',
       description: 'Build your skills. Get your bands.',
-      bgImage: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=500&auto=format&fit=crop&q=80',
-      flag: '🇬🇧',
+      bgImage: '/images/exams/ielts.jpg',
+      badgeText: 'GB',
+      scriptWords: ['Study', 'Work', 'Settle'],
     },
     {
       category: 'OET',
       title: 'OET',
       description: 'Your career in healthcare, starts here.',
-      bgImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=500&auto=format&fit=crop&q=80',
-      flag: '🩺',
+      bgImage: '/images/exams/oet.jpg',
+      isMedicalCross: true,
+      scriptWords: ['Care', 'Connect', 'Grow'],
     },
     {
       category: 'PTE',
       title: 'PTE',
       description: 'Prove your English. Open global opportunities.',
-      bgImage: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&auto=format&fit=crop&q=80',
-      flag: '🏙️',
+      bgImage: '/images/exams/pte.jpg',
+      badgeText: 'PTE',
+      scriptWords: ['Global', 'Career', 'Ahead'],
     },
     {
       category: 'German',
       title: 'German',
       description: 'Learn German. Expand your world.',
-      bgImage: 'https://images.unsplash.com/photo-1527866512907-a35a62a7f673?w=500&auto=format&fit=crop&q=80',
-      flag: '🇩🇪',
+      bgImage: '/images/exams/german.jpg',
+      badgeText: 'DE',
+      scriptWords: ['Learn', 'Explore', 'Belong'],
     },
   ];
 
@@ -163,61 +169,98 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. CHOOSE YOUR EXAM - SELECT YOUR PATH (Image 5) */}
+      {/* 2. CHOOSE YOUR EXAM - SELECT YOUR PATH (Exact Match from User Reference) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 sm:mb-8 gap-3">
           <div>
-            <span className="text-xs font-semibold tracking-widest uppercase text-emerald-700 block mb-1 font-['DM_Sans',sans-serif]">
-              CHOOSE YOUR EXAM
-            </span>
-            <h2 className="text-xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
+            <div className="flex items-center gap-3 mb-1.5">
+              <span className="text-xs font-bold tracking-widest uppercase text-[#00875a] font-['DM_Sans',sans-serif]">
+                CHOOSE YOUR EXAM
+              </span>
+              <div className="w-12 h-[1.5px] bg-[#00875a]/30" />
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif] tracking-tight">
               Select Your Path
             </h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-['DM_Sans',sans-serif] mt-1">
+              World-class study materials and expert guidance to help you succeed.
+            </p>
           </div>
           <button
             onClick={() => navigateToCatalog('All')}
-            className="inline-flex items-center text-xs sm:text-sm font-semibold text-emerald-700 hover:text-emerald-800 gap-1.5 transition-colors group self-start sm:self-auto font-['DM_Sans',sans-serif]"
+            className="inline-flex items-center text-xs sm:text-sm font-bold text-[#00875a] hover:text-[#00734c] gap-1.5 transition-colors group self-start sm:self-auto font-['DM_Sans',sans-serif]"
           >
             <span>View All Exams</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
 
-        {/* 2 columns on mobile, 4 columns on desktop for perfect thumb browsing */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-6">
+        {/* 4 Cards Grid matching Reference Mockup */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
           {examPaths.map((path) => (
             <div
               key={path.category}
               onClick={() => navigateToCatalog(path.category)}
-              className="group relative h-48 sm:h-64 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl cursor-pointer border border-slate-200 transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.98] touch-card"
+              className="group relative h-72 sm:h-80 rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl cursor-pointer border border-slate-200 transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.99] touch-card flex flex-col justify-between"
             >
-              {/* Background Image with Overlay */}
+              {/* High-Resolution Background Image */}
               <img
                 src={path.bgImage}
                 alt={path.title}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                referrerPolicy="no-referrer"
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                loading="eager"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0a2540] via-[#0a2540]/65 to-transparent" />
 
-              {/* Content overlay */}
-              <div className="absolute inset-0 p-3 sm:p-5 flex flex-col justify-between text-white">
-                <div className="flex justify-between items-start">
-                  <span className="text-xl sm:text-2xl bg-white/20 backdrop-blur-md w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                    {path.flag}
-                  </span>
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+              {/* Bottom Navy Gradient Overlay (Keeps top landmarks bright and bottom text crisp) */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#061e38] via-[#061e38]/70 via-45% to-transparent" />
+
+              {/* Top Row: Left Badge & Right Calligraphic Script */}
+              <div className="relative z-10 p-4 sm:p-5 flex items-start justify-between">
+                {/* Top-Left Circular Badge */}
+                {path.isMedicalCross ? (
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#00875a] text-white flex items-center justify-center font-bold text-xl shadow-md border border-white/25 leading-none">
+                    +
                   </div>
-                </div>
+                ) : (
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#071d36]/90 backdrop-blur-md border border-white/20 text-white font-extrabold text-[11px] sm:text-xs flex items-center justify-center shadow-md tracking-wider">
+                    {path.badgeText}
+                  </div>
+                )}
 
-                <div>
-                  <h3 className="text-lg sm:text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] mb-0.5 sm:mb-1 text-white group-hover:text-emerald-300 transition-colors">
+                {/* Top-Right Angled Cursive Script (Caveat font) */}
+                <div className="font-script text-base sm:text-lg font-bold text-[#00875a] leading-[1.05] text-right transform -rotate-3 select-none drop-shadow-[0_1px_3px_rgba(255,255,255,0.9)]">
+                  {path.scriptWords.map((word, i) => (
+                    <div key={i}>{word}</div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Decorative Emerald Curved Arc Accent (Matching Reference) */}
+              <div className="absolute left-0 bottom-16 sm:bottom-18 w-20 h-20 pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity">
+                <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
+                  <path
+                    d="M 2 74 C 6 36, 28 14, 66 6"
+                    stroke="#00a375"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+
+              {/* Bottom Row: Title, Description & Action Button */}
+              <div className="relative z-10 p-4 sm:p-5 pt-0 flex items-end justify-between gap-3 text-white">
+                <div className="flex-1">
+                  <h3 className="text-2xl sm:text-3xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] text-white group-hover:text-emerald-300 transition-colors leading-tight">
                     {path.title}
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-slate-200 line-clamp-2 leading-relaxed font-['DM_Sans',sans-serif]">
+                  <p className="text-xs text-slate-200/90 leading-relaxed font-['DM_Sans',sans-serif] mt-1 line-clamp-2">
                     {path.description}
                   </p>
+                </div>
+
+                {/* Bottom-Right Teal Circular Button with Arrow */}
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#00a375] group-hover:bg-[#00875a] text-white flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:translate-x-0.5 shrink-0 mb-0.5">
+                  <ArrowRight className="w-4 h-4 text-white" />
                 </div>
               </div>
             </div>
