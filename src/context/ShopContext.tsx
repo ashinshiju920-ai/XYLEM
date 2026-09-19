@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial } from '../types';
 import { BOOKS } from '../data/books';
-import { TESTIMONIALS } from '../data/testimonials';
-import { saveCatalogToCloud, fetchCatalogFromCloud, subscribeToRealtimeBroadcast } from '../utils/cloudSync';
+import {
+  saveCatalogToCloud,
+  fetchCatalogFromCloud,
+  checkCatalogVersion,
+  subscribeToRealtimeBroadcast,
+} from '../utils/cloudSync';
 
 interface Toast {
   id: string;
@@ -148,6 +152,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const localCatalogVersionRef = useRef<number>(0);
   const isFetchingRemoteRef = useRef<boolean>(false);
 
+  useEffect(() => {
+    try {
+      const savedVersion = Number(localStorage.getItem('xylem_books_version'));
+      if (savedVersion) localCatalogVersionRef.current = savedVersion;
+    } catch {}
+  }, []);
+
   const triggerCloudSync = async (booksToSync: Book[]) => {
     setIsCloudSyncing(true);
     try {
@@ -167,18 +178,31 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await triggerCloudSync(customBooks || books);
   };
 
-  const refreshProductsFromCloud = async () => {
+  const refreshProductsFromCloud = async (force = false) => {
     if (isFetchingRemoteRef.current) return;
     isFetchingRemoteRef.current = true;
     try {
+      // 1. Fast version check first (skips large payload if nothing changed)
+      if (!force) {
+        const latestVersion = await checkCatalogVersion();
+        if (latestVersion !== null && latestVersion <= localCatalogVersionRef.current) {
+          isFetchingRemoteRef.current = false;
+          return;
+        }
+      }
+
+      // 2. Fetch full updated catalog
       const remote = await fetchCatalogFromCloud();
       if (remote && Array.isArray(remote.books) && remote.books.length > 0) {
-        const remoteVersion = remote.version || 0;
-        // If remote version is newer, update state live
-        if (remoteVersion > localCatalogVersionRef.current) {
+        const remoteVersion = remote.version || Date.now();
+        if (force || remoteVersion > localCatalogVersionRef.current) {
           localCatalogVersionRef.current = remoteVersion;
           setBooks(remote.books);
           setLastCloudSync(new Date());
+          try {
+            localStorage.setItem('xylem_books_data', JSON.stringify(remote.books));
+            localStorage.setItem('xylem_books_version', String(remoteVersion));
+          } catch {}
         }
       }
     } catch (err) {
@@ -188,9 +212,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Real-time listeners: initial fetch, cross-tab broadcast, 4-second poller, tab visibility
+  // Real-time synchronization listeners:
+  // - Immediate force fetch on mount
+  // - 1.5-second ultra-responsive version check poller
+  // - Instant cross-tab BroadcastChannel & Storage events (0ms latency)
+  // - Immediate check on tab focus & visibility change
+  // - User interaction wakeup (click / touch)
   useEffect(() => {
-    refreshProductsFromCloud();
+    refreshProductsFromCloud(true);
 
     const unsubscribe = subscribeToRealtimeBroadcast((newBooks, version) => {
       localCatalogVersionRef.current = version;
@@ -198,23 +227,35 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLastCloudSync(new Date());
     });
 
+    // Fast 1.5s real-time check interval
     const interval = setInterval(() => {
-      refreshProductsFromCloud();
-    }, 4000);
+      refreshProductsFromCloud(false);
+    }, 1500);
 
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        refreshProductsFromCloud();
+    const onWakeup = () => {
+      refreshProductsFromCloud(false);
+    };
+
+    window.addEventListener('focus', onWakeup);
+    document.addEventListener('visibilitychange', onWakeup);
+
+    // Throttled check on user click or touch
+    let lastInteractionTime = 0;
+    const onUserInteraction = () => {
+      const now = Date.now();
+      if (now - lastInteractionTime > 3000) {
+        lastInteractionTime = now;
+        refreshProductsFromCloud(false);
       }
     };
-    window.addEventListener('focus', onVisible);
-    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pointerdown', onUserInteraction, { passive: true });
 
     return () => {
       unsubscribe();
       clearInterval(interval);
-      window.removeEventListener('focus', onVisible);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onWakeup);
+      document.removeEventListener('visibilitychange', onWakeup);
+      window.removeEventListener('pointerdown', onUserInteraction);
     };
   }, []);
 

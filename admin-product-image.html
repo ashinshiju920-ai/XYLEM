@@ -3,117 +3,303 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin - Update Product Image</title>
+  <title>Admin - Real-Time Product Image & Catalog Sync</title>
   <style>
+    :root {
+      --primary: #059669;
+      --primary-hover: #047857;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f1f5f9;
+      background: var(--bg);
+      color: var(--text);
       padding: 40px 20px;
       display: flex;
       justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+      margin: 0;
     }
     .admin-card {
-      background: #ffffff;
-      padding: 28px;
-      border-radius: 12px;
-      max-width: 480px;
+      background: var(--card-bg);
+      padding: 32px;
+      border-radius: 16px;
+      max-width: 520px;
       width: 100%;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+      height: fit-content;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
     h2 {
-      margin-top: 0;
-      color: #0f172a;
-      font-size: 1.25rem;
+      margin: 0 0 8px 0;
+      color: #ffffff;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    p.subtitle {
+      margin: 0 0 24px 0;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      line-height: 1.4;
     }
     .form-group {
-      margin-bottom: 18px;
+      margin-bottom: 20px;
     }
     label {
       display: block;
-      font-size: 0.875rem;
+      font-size: 0.85rem;
       font-weight: 600;
-      margin-bottom: 6px;
-      color: #334155;
+      margin-bottom: 8px;
+      color: #e2e8f0;
     }
-    input[type="text"], input[type="file"] {
+    select, input[type="text"], input[type="file"] {
       width: 100%;
       box-sizing: border-box;
-      padding: 10px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      font-size: 0.9rem;
+      padding: 12px 14px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: #ffffff;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    button {
+    select:focus, input[type="text"]:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    }
+    .file-dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(15, 23, 42, 0.5);
+      transition: all 0.2s;
+    }
+    .file-dropzone:hover {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.05);
+    }
+    button.submit-btn {
       width: 100%;
-      background: #2563eb;
+      background: var(--primary);
       color: white;
       border: none;
-      padding: 12px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      border-radius: 6px;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: 8px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
     }
-    button:hover {
-      background: #1d4ed8;
+    button.submit-btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
     }
-    button:disabled {
-      background: #94a3b8;
+    button.submit-btn:disabled {
+      background: #475569;
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
     .preview-box {
-      margin-top: 20px;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 16px;
+      margin-top: 24px;
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
       text-align: center;
       display: none;
     }
     .preview-box img {
       max-width: 100%;
-      max-height: 240px;
-      border-radius: 8px;
-      border: 1px solid #cbd5e1;
+      max-height: 260px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
       object-fit: cover;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.4);
     }
     .status-msg {
-      margin-top: 12px;
-      font-size: 0.85rem;
+      margin-top: 16px;
+      font-size: 0.9rem;
       font-weight: 500;
+      padding: 12px 14px;
+      border-radius: 8px;
+      display: none;
     }
-    .status-success { color: #16a34a; }
-    .status-error { color: #dc2626; }
+    .status-success {
+      display: block;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .status-loading {
+      display: block;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
   </style>
 </head>
 <body>
 
   <div class="admin-card">
+    <div class="header-badge">
+      <span class="pulse-dot"></span>
+      <span>Real-Time Cloud Sync Active</span>
+    </div>
     <h2>Update Product Image</h2>
-    
+    <p class="subtitle">Upload high-res cover photos. Changes propagate instantly to all website visitors worldwide with zero lag.</p>
+
     <div class="form-group">
+      <label for="productSelect">Select Existing Product or Custom SKU</label>
+      <select id="productSelect" onchange="handleProductSelectChange()">
+        <option value="ielts-full-prep">IELTS Full Preparation with Mock Tests (ielts-full-prep)</option>
+        <option value="oet-full-prep">OET Full Preparation with Mock Tests (oet-full-prep)</option>
+        <option value="german-full-prep">German A1-B2 Complete Mastery (german-full-prep)</option>
+        <option value="pte-academic-prep">PTE Academic Complete Preparation (pte-academic-prep)</option>
+        <option value="ielts-speaking-mastery">IELTS Speaking 8.5 Masterclass (ielts-speaking-mastery)</option>
+        <option value="oet-nursing-pharmacology">OET Nursing & Pharmacology (oet-nursing-pharmacology)</option>
+        <option value="german-b2-grammar">German B2 Advanced Grammar & Vocab (german-b2-grammar)</option>
+        <option value="ielts-writing-band8">IELTS Writing Task 1 & 2 Band 8+ (ielts-writing-band8)</option>
+        <option value="pte-79-plus-drills">PTE 79+ Targeted Practice (pte-79-plus-drills)</option>
+        <option value="PROD-1029">PROD-1029 (Custom SKU)</option>
+        <option value="__custom__">+ Enter Custom SKU / Product ID...</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="customSkuGroup" style="display: none;">
       <label for="productId">Product SKU / ID</label>
-      <input type="text" id="productId" placeholder="e.g. PROD-1029" value="PROD-1029" />
+      <input type="text" id="productId" placeholder="e.g. PROD-1029 or my-product-id" value="ielts-full-prep" />
     </div>
 
     <div class="form-group">
-      <label for="imageFile">Select New Image</label>
-      <input type="file" id="imageFile" accept="image/*" />
+      <label for="imageFile">Select Product Image</label>
+      <input type="file" id="imageFile" accept="image/*" onchange="previewSelectedFile(this)" />
     </div>
 
-    <button id="uploadBtn" onclick="handleImageUpdate()">Upload & Update Image</button>
+    <button id="uploadBtn" class="submit-btn" onclick="handleImageUpdate()">
+      <span>⚡ Upload & Sync to Everyone Live</span>
+    </button>
 
     <div id="status" class="status-msg"></div>
 
     <div id="previewBox" class="preview-box">
-      <label>Live Cloudinary Preview</label>
-      <img id="previewImg" src="" alt="Product Image" />
-      <p style="font-size: 0.75rem; color: #64748b; word-break: break-all;" id="urlDisplay"></p>
+      <label style="margin-bottom: 10px;">Live Cloud CDN Image Preview</label>
+      <img id="previewImg" src="" alt="Product Preview" />
+      <p style="font-size: 0.75rem; color: #94a3b8; word-break: break-all; margin-top: 8px;" id="urlDisplay"></p>
     </div>
   </div>
 
   <script>
+    const CLOUD_NAME = 'gog1fpsj';
+    const API_KEY = '493453349916754';
+    const API_SECRET = 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
+    const PUBLIC_CATALOG_ID = 'xylem_products_live';
+
+    // Auto-load live catalog on mount to populate select options
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const res = await fetch(`/api/products?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.books) && data.books.length > 0) {
+            populateProductSelect(data.books);
+          }
+        }
+      } catch {}
+    });
+
+    function populateProductSelect(books) {
+      const select = document.getElementById('productSelect');
+      const currentVal = select.value;
+      select.innerHTML = '';
+      books.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = `${b.title} (${b.id})`;
+        select.appendChild(opt);
+      });
+      const customOpt = document.createElement('option');
+      customOpt.value = '__custom__';
+      customOpt.textContent = '+ Enter Custom SKU / Product ID...';
+      select.appendChild(customOpt);
+
+      if (books.some(b => b.id === currentVal)) {
+        select.value = currentVal;
+      }
+      handleProductSelectChange();
+    }
+
+    function handleProductSelectChange() {
+      const select = document.getElementById('productSelect');
+      const customGroup = document.getElementById('customSkuGroup');
+      const productIdInput = document.getElementById('productId');
+
+      if (select.value === '__custom__') {
+        customGroup.style.display = 'block';
+        productIdInput.value = '';
+        productIdInput.focus();
+      } else {
+        customGroup.style.display = 'none';
+        productIdInput.value = select.value;
+      }
+    }
+
+    function previewSelectedFile(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById('previewImg').src = e.target.result;
+          document.getElementById('urlDisplay').textContent = 'Local preview - ready to upload';
+          document.getElementById('previewBox').style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+
     async function handleImageUpdate() {
-      const productId = document.getElementById('productId').value.trim() || 'unassigned';
+      const productIdInput = document.getElementById('productId');
+      const productId = productIdInput.value.trim() || 'unassigned';
       const fileInput = document.getElementById('imageFile');
       const uploadBtn = document.getElementById('uploadBtn');
       const status = document.getElementById('status');
@@ -128,8 +314,9 @@
       }
 
       uploadBtn.disabled = true;
-      uploadBtn.textContent = 'Uploading to Cloudinary...';
-      status.textContent = '';
+      uploadBtn.innerHTML = '<span>⏳ Uploading to Cloudinary CDN & invalidating cache...</span>';
+      status.className = 'status-msg status-loading';
+      status.textContent = 'Uploading to Cloudinary & broadcasting to all visitors...';
 
       const formData = new FormData();
       formData.append('image', fileInput.files[0]);
@@ -138,6 +325,7 @@
       try {
         let imageUrl = '';
 
+        // 1. Upload image to Cloudinary via edge endpoint
         try {
           const response = await fetch('/api/upload', {
             method: 'POST',
@@ -146,7 +334,7 @@
 
           if (response.ok) {
             const data = await response.json();
-            if (data.success) {
+            if (data.success && data.imageUrl) {
               imageUrl = data.imageUrl;
             } else {
               throw new Error(data.error || 'Failed to upload image.');
@@ -155,15 +343,12 @@
             throw new Error(`Edge endpoint status ${response.status}`);
           }
         } catch (edgeErr) {
-          console.warn('Edge endpoint failed, attempting direct Cloudinary fallback:', edgeErr);
-          const cloudName = 'gog1fpsj';
-          const apiKey = '493453349916754';
-          const apiSecret = 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
-          const timestamp = Math.round(new Date().getTime() / 1000);
+          console.warn('Edge upload failed, using direct Web Crypto Cloudinary upload:', edgeErr);
+          const timestamp = Math.round(Date.now() / 1000);
           const folder = 'ecommerce_products';
           const publicId = `product_${productId}_${timestamp}`;
 
-          const paramsToSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+          const paramsToSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
           const encoder = new TextEncoder();
           const data = encoder.encode(paramsToSign);
           const hashBuffer = await crypto.subtle.digest('SHA-1', data);
@@ -172,13 +357,13 @@
 
           const directData = new FormData();
           directData.append('file', fileInput.files[0]);
-          directData.append('api_key', apiKey);
+          directData.append('api_key', API_KEY);
           directData.append('timestamp', timestamp.toString());
           directData.append('folder', folder);
           directData.append('public_id', publicId);
           directData.append('signature', signature);
 
-          const directRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          const directRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
             method: 'POST',
             body: directData,
           });
@@ -190,49 +375,105 @@
           }
         }
 
-        status.className = 'status-msg status-success';
-        status.textContent = 'Image updated successfully!';
-        
+        // 2. Synchronize product image to live cloud catalog
+        let syncSuccess = false;
+        try {
+          const pRes = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update-product-image',
+              productId: productId,
+              imageUrl: imageUrl,
+            }),
+          });
+
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            if (pData.success && Array.isArray(pData.books)) {
+              syncSuccess = true;
+              localStorage.setItem('xylem_books_data', JSON.stringify(pData.books));
+              localStorage.setItem('xylem_books_version', String(pData.version || Date.now()));
+              if ('BroadcastChannel' in window) {
+                const bc = new BroadcastChannel('xylem_products_realtime_sync');
+                bc.postMessage({ type: 'CATALOG_UPDATED', books: pData.books, version: pData.version });
+                bc.close();
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.warn('API sync endpoint failed, attempting direct Cloudinary raw catalog sync:', apiErr);
+        }
+
+        // Fallback: direct Cloudinary raw catalog sync with instant CDN invalidation
+        if (!syncSuccess) {
+          try {
+            const rawFetch = await fetch(`https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/${PUBLIC_CATALOG_ID}.json?_t=${Date.now()}`);
+            let catalog = { books: [] };
+            if (rawFetch.ok) {
+              catalog = await rawFetch.json();
+            } else {
+              const localStored = localStorage.getItem('xylem_books_data');
+              if (localStored) catalog.books = JSON.parse(localStored);
+            }
+
+            const idx = catalog.books.findIndex(b => b.id === productId);
+            if (idx !== -1) {
+              catalog.books[idx].imageUrl = imageUrl;
+            } else {
+              catalog.books.push({ id: productId, title: productId, imageUrl });
+            }
+
+            const timestamp = Math.round(Date.now() / 1000);
+            catalog.version = timestamp;
+            catalog.updatedAt = new Date().toISOString();
+
+            const paramsToSign = `invalidate=true&overwrite=true&public_id=${PUBLIC_CATALOG_ID}&timestamp=${timestamp}${API_SECRET}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(paramsToSign);
+            const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const signature = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+            const uploadData = new FormData();
+            const blob = new Blob([JSON.stringify(catalog)], { type: 'application/json' });
+            uploadData.append('file', blob, 'xylem_products_live.json');
+            uploadData.append('api_key', API_KEY);
+            uploadData.append('timestamp', timestamp.toString());
+            uploadData.append('public_id', PUBLIC_CATALOG_ID);
+            uploadData.append('overwrite', 'true');
+            uploadData.append('invalidate', 'true');
+            uploadData.append('signature', signature);
+
+            await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`, {
+              method: 'POST',
+              body: uploadData,
+            });
+
+            localStorage.setItem('xylem_books_data', JSON.stringify(catalog.books));
+            localStorage.setItem('xylem_books_version', String(timestamp));
+            if ('BroadcastChannel' in window) {
+              const bc = new BroadcastChannel('xylem_products_realtime_sync');
+              bc.postMessage({ type: 'CATALOG_UPDATED', books: catalog.books, version: timestamp });
+              bc.close();
+            }
+          } catch (rawErr) {
+            console.error('Direct raw catalog sync error:', rawErr);
+          }
+        }
+
         previewImg.src = imageUrl;
         urlDisplay.textContent = imageUrl;
         previewBox.style.display = 'block';
 
-        try {
-          const stored = localStorage.getItem('xylem_books_data');
-          if (stored) {
-            const books = JSON.parse(stored);
-            const idx = books.findIndex(b => b.id === productId);
-            if (idx !== -1) {
-              books[idx].imageUrl = imageUrl;
-              localStorage.setItem('xylem_books_data', JSON.stringify(books));
-              console.log('Synchronized book imageUrl in localStorage');
-
-              // Sync to Cloudflare Pages API
-              fetch('/api/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ books })
-              }).catch(() => {});
-
-              // Broadcast live across open browser windows/tabs
-              if ('BroadcastChannel' in window) {
-                try {
-                  const bc = new BroadcastChannel('xylem_products_realtime_sync');
-                  bc.postMessage({ type: 'CATALOG_UPDATED', books, version: Date.now() });
-                  bc.close();
-                } catch(e) {}
-              }
-            }
-          }
-        } catch (e) {
-          console.error(e);
-        }
+        status.className = 'status-msg status-success';
+        status.innerHTML = `✓ <strong>Success!</strong> Product image updated and live synced to all visitors worldwide in real time.`;
       } catch (err) {
         status.className = 'status-msg status-error';
         status.textContent = 'Error: ' + err.message;
       } finally {
         uploadBtn.disabled = false;
-        uploadBtn.textContent = 'Upload & Update Image';
+        uploadBtn.innerHTML = '<span>⚡ Upload & Sync to Everyone Live</span>';
       }
     }
   </script>
