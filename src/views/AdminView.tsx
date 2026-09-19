@@ -95,6 +95,7 @@ export const AdminView: React.FC = () => {
     openPdfViewer,
     setCurrentView,
     navigateToProduct,
+    navigateToCatalog,
     showToast,
     isCloudSyncing,
     lastCloudSync,
@@ -655,6 +656,95 @@ export const AdminView: React.FC = () => {
     return matchesCategory && matchesSearch;
   });
 
+  // Arrange tab filter & category helpers
+  const [arrangeCategory, setArrangeCategory] = useState<ExamCategory | 'All'>('All');
+
+  const arrangeCategoryPills: { id: ExamCategory | 'All'; label: string; count: number }[] = [
+    { id: 'All', label: 'All Products', count: books.length },
+    { id: 'IELTS', label: 'IELTS', count: books.filter((b) => b.category === 'IELTS').length },
+    { id: 'OET', label: 'OET', count: books.filter((b) => b.category === 'OET').length },
+    { id: 'PTE', label: 'PTE', count: books.filter((b) => b.category === 'PTE').length },
+    { id: 'German', label: 'German', count: books.filter((b) => b.category === 'German').length },
+  ];
+
+  const visibleArrangeBooks = arrangeCategory === 'All'
+    ? books
+    : books.filter((b) => b.category === arrangeCategory);
+
+  const activeArrangeExamPath = arrangeCategory !== 'All'
+    ? examPaths.find((p) => p.category === arrangeCategory)
+    : null;
+
+  // Category-aware Move Up / Down
+  const handleMoveWithinCategory = (bookId: string, direction: 'up' | 'down') => {
+    if (arrangeCategory === 'All') {
+      moveBookOrder(bookId, direction);
+      return;
+    }
+    const catList = books.filter((b) => b.category === arrangeCategory);
+    const catIdx = catList.findIndex((b) => b.id === bookId);
+    if (catIdx === -1) return;
+    if (direction === 'up' && catIdx === 0) return;
+    if (direction === 'down' && catIdx === catList.length - 1) return;
+
+    const targetBook = catList[direction === 'up' ? catIdx - 1 : catIdx + 1];
+    const fromIdx = books.findIndex((b) => b.id === bookId);
+    const toIdx = books.findIndex((b) => b.id === targetBook.id);
+
+    const next = [...books];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+
+    reorderBooks(next);
+    showToast(`Moved "${catList[catIdx].title}" ${direction} in ${arrangeCategory}`, 'info');
+  };
+
+  // Category-aware Move to Top
+  const handleMoveToTopWithinCategory = (bookId: string) => {
+    if (arrangeCategory === 'All') {
+      setBookOrderPosition(bookId, 1);
+      return;
+    }
+    const catList = books.filter((b) => b.category === arrangeCategory);
+    if (catList.length === 0 || catList[0].id === bookId) return;
+    const firstCatBook = catList[0];
+    const fromIdx = books.findIndex((b) => b.id === bookId);
+    const targetIdx = books.findIndex((b) => b.id === firstCatBook.id);
+
+    const next = [...books];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(targetIdx, 0, moved);
+
+    reorderBooks(next);
+    const currentBook = books.find((b) => b.id === bookId);
+    showToast(`"${currentBook?.title || 'Product'}" is now #1 in ${arrangeCategory}!`, 'success');
+  };
+
+  // Category-aware Set Position
+  const handleSetPositionWithinCategory = (bookId: string, targetRank: number) => {
+    if (arrangeCategory === 'All') {
+      setBookOrderPosition(bookId, targetRank);
+      return;
+    }
+    const catList = books.filter((b) => b.category === arrangeCategory);
+    const catIdx = catList.findIndex((b) => b.id === bookId);
+    if (catIdx === -1) return;
+    const clampedRank = Math.max(1, Math.min(catList.length, targetRank));
+    const targetBook = catList[clampedRank - 1];
+    if (!targetBook || targetBook.id === bookId) return;
+
+    const fromIdx = books.findIndex((b) => b.id === bookId);
+    const toIdx = books.findIndex((b) => b.id === targetBook.id);
+
+    const next = [...books];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+
+    reorderBooks(next);
+    showToast(`Moved to position #${targetRank} in ${arrangeCategory}!`, 'success');
+  };
+
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-['DM_Sans',sans-serif]">
       {/* Top Admin Navigation Bar */}
@@ -705,7 +795,7 @@ export const AdminView: React.FC = () => {
             {[
               { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
               { id: 'products', label: `Products & Books (${books.length})`, icon: BookOpen },
-              { id: 'arrange', label: 'Arrange Homepage Order', icon: ArrowUpDown },
+              { id: 'arrange', label: 'Arrange Products & Categories', icon: ArrowUpDown },
               { id: 'homepage_images', label: 'Homepage Images & Cards', icon: ImageIcon },
               { id: 'pdfs', label: `PDF Manager (${totalPdfs})`, icon: FileText },
               { id: 'reviews', label: `Reviews & Testimonials (${totalReviewsCount})`, icon: Star },
@@ -1163,7 +1253,7 @@ export const AdminView: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB: ARRANGE HOMEPAGE ORDER
+            TAB: ARRANGE HOMEPAGE & CATEGORY ORDER
             ========================================================================= */}
         {activeTab === 'arrange' && (
           <div className="space-y-6 animate-in fade-in duration-200">
@@ -1175,20 +1265,18 @@ export const AdminView: React.FC = () => {
                     <ArrowUpDown className="w-4 h-4" />
                   </span>
                   <h3 className="text-lg font-black text-white font-['Plus_Jakarta_Sans',sans-serif]">
-                    Arrange Storefront Homepage Products
+                    Arrange Products by Category &amp; Storefront Order
                   </h3>
                   <span className="text-[10px] uppercase font-black bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
                     Live Ordering
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 mt-1.5 max-w-2xl">
-                  Reorder and customize the exact sequence of products displayed on the main storefront homepage. 
-                  The <strong className="text-emerald-300">Top 5 products</strong> will be prominently showcased in the &ldquo;Most Popular &amp; Best-selling Courses&rdquo; section on the homepage.
-                  Any order change syncs live to all active devices in real-time.
+                  Filter by category (<strong>IELTS, OET, PTE, German</strong>) to organize and prioritize products. When customers click any exam category card on the homepage, they are redirected to these products displayed in your custom arranged order.
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -1196,7 +1284,7 @@ export const AdminView: React.FC = () => {
                     showToast('Catalog order synced with cloud in real-time!', 'success');
                   }}
                   disabled={isCloudSyncing}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
                   <span>{isCloudSyncing ? 'Syncing...' : 'Sync Order to Cloud'}</span>
@@ -1205,13 +1293,142 @@ export const AdminView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setCurrentView('home')}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00875a] hover:bg-[#00734c] text-white shadow-sm transition-all flex items-center gap-2 active:scale-95"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00875a] hover:bg-[#00734c] text-white shadow-sm transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
-                  <span>View Live Homepage</span>
+                  <span>View Live Storefront</span>
                 </button>
               </div>
             </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {arrangeCategoryPills.map((pill) => {
+                const isSelected = arrangeCategory === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setArrangeCategory(pill.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-[#00875a] text-white shadow-md shadow-emerald-900/20 scale-[1.02]'
+                        : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    <span>{pill.label}</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                        isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {pill.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Category Redirection Setting & Preview Banner */}
+            {activeArrangeExamPath && (
+              <div className="bg-gradient-to-r from-[#0a2540] via-slate-900 to-emerald-950 text-white p-5 sm:p-6 rounded-3xl border border-emerald-500/30 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center border border-emerald-500/30">
+                      {activeArrangeExamPath.badgeText || arrangeCategory.slice(0, 2)}
+                    </span>
+                    <h4 className="text-base sm:text-lg font-black text-white font-['Plus_Jakarta_Sans',sans-serif]">
+                      Storefront Redirection for &ldquo;{arrangeCategory}&rdquo;
+                    </h4>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                      Active Category
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                    When visitors click the <strong>{arrangeCategory}</strong> card on the storefront homepage, where should they be redirected?
+                  </p>
+
+                  {/* Redirection Options */}
+                  <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <label
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                        (activeArrangeExamPath.redirectTarget || 'catalog') === 'catalog'
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="arrange_cat_redirect"
+                        checked={(activeArrangeExamPath.redirectTarget || 'catalog') === 'catalog'}
+                        onChange={() => updateExamPath(arrangeCategory, { redirectTarget: 'catalog' })}
+                        className="text-emerald-500 focus:ring-emerald-400"
+                      />
+                      <span>Redirect to {arrangeCategory} Catalog (Arranged Order)</span>
+                    </label>
+
+                    <label
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                        activeArrangeExamPath.redirectTarget === 'product'
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="arrange_cat_redirect"
+                        checked={activeArrangeExamPath.redirectTarget === 'product'}
+                        onChange={() => {
+                          const firstId = visibleArrangeBooks[0]?.id || books[0]?.id || '';
+                          updateExamPath(arrangeCategory, {
+                            redirectTarget: 'product',
+                            targetProductId: activeArrangeExamPath.targetProductId || firstId,
+                          });
+                        }}
+                        className="text-emerald-500 focus:ring-emerald-400"
+                      />
+                      <span>Redirect directly to a Specific Product</span>
+                    </label>
+                  </div>
+
+                  {activeArrangeExamPath.redirectTarget === 'product' && (
+                    <div className="pt-2 flex items-center gap-2 max-w-md">
+                      <span className="text-xs text-slate-400 shrink-0 font-medium">Target Course:</span>
+                      <select
+                        value={activeArrangeExamPath.targetProductId || visibleArrangeBooks[0]?.id || ''}
+                        onChange={(e) => updateExamPath(arrangeCategory, { targetProductId: e.target.value })}
+                        className="px-3 py-1.5 text-xs rounded-xl bg-slate-800 border border-slate-600 text-white font-medium focus:ring-2 focus:ring-emerald-500 w-full"
+                      >
+                        {visibleArrangeBooks.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.title} (₹{b.prices.digital.price})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Test Redirection Button */}
+                <div className="shrink-0 self-start md:self-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeArrangeExamPath.redirectTarget === 'product' && activeArrangeExamPath.targetProductId) {
+                        navigateToProduct(activeArrangeExamPath.targetProductId);
+                      } else {
+                        navigateToCatalog(arrangeCategory);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl text-xs font-extrabold bg-[#00875a] hover:bg-[#00734c] text-white shadow-md transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                    title={`Test clicking the ${arrangeCategory} card`}
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Test {arrangeCategory} Redirection</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Product Sequence Reordering List */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1219,164 +1436,219 @@ export const AdminView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="w-4 h-4 text-emerald-600" />
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Active Catalog Display Sequence ({books.length} Products)
+                    {arrangeCategory === 'All'
+                      ? `Active Catalog Display Sequence (${books.length} Products)`
+                      : `${arrangeCategory} Product Sequence (${visibleArrangeBooks.length} Products)`}
                   </h4>
                 </div>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  Use ▲ / ▼ buttons or select target position to reorder
+                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                  {arrangeCategory === 'All'
+                    ? 'Top 5 are featured on homepage'
+                    : `Arranged order displayed when customer clicks ${arrangeCategory}`}
                 </span>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {books.map((book, index) => {
-                  const isTopFive = index < 5;
-                  const isFirst = index === 0;
-                  const isLast = index === books.length - 1;
+              {visibleArrangeBooks.length === 0 ? (
+                <div className="p-12 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <h5 className="text-sm font-bold text-slate-800">
+                    No products found in {arrangeCategory}
+                  </h5>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    You can switch an existing product&apos;s category to {arrangeCategory} or create a new course.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookFormData({ ...initialBookForm, category: arrangeCategory as ExamCategory });
+                      setEditingBookId(null);
+                      setIsProductModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#00875a] text-white hover:bg-[#00734c] cursor-pointer shadow-sm transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add New {arrangeCategory} Product</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {visibleArrangeBooks.map((book, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === visibleArrangeBooks.length - 1;
+                    const globalRank = books.findIndex((b) => b.id === book.id) + 1;
 
-                  return (
-                    <div
-                      key={book.id}
-                      className={`p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
-                        isTopFive ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-slate-50/70'
-                      }`}
-                    >
-                      {/* Left: Position Rank & Book Info */}
-                      <div className="flex items-center gap-4 min-w-0 flex-1">
-                        {/* Position Rank Badge */}
-                        <div className="flex flex-col items-center justify-center shrink-0 w-12 text-center">
-                          <div
-                            className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-xs ${
-                              isTopFive
-                                ? 'bg-emerald-600 text-white shadow-emerald-500/20'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            #{index + 1}
-                          </div>
-                          {isTopFive && (
-                            <span className="text-[8px] font-black uppercase tracking-wider text-emerald-700 mt-1">
-                              Featured
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Book Thumbnail / Cover */}
-                        <div className="w-12 shrink-0">
-                          <BookCover book={book} size="sm" />
-                        </div>
-
-                        {/* Title, Subtitle, Pricing */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                              {book.category}
-                            </span>
-                            <span className="text-[9px] font-medium text-slate-500">
-                              {book.type}
-                            </span>
-                            {book.isBestSeller && (
-                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                                Bestseller
+                    return (
+                      <div
+                        key={book.id}
+                        className={`p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+                          isFirst ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        {/* Left: Position Rank & Book Info */}
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          {/* Position Rank Badge */}
+                          <div className="flex flex-col items-center justify-center shrink-0 w-12 text-center">
+                            <div
+                              className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-xs ${
+                                isFirst
+                                  ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              #{index + 1}
+                            </div>
+                            {isFirst && (
+                              <span className="text-[8px] font-black uppercase tracking-wider text-emerald-700 mt-1">
+                                {arrangeCategory === 'All' ? 'Featured' : '#1 Ranked'}
+                              </span>
+                            )}
+                            {arrangeCategory !== 'All' && (
+                              <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+                                G#{globalRank}
                               </span>
                             )}
                           </div>
-                          <h5 className="text-sm font-bold text-slate-900 truncate mt-0.5">
-                            {book.title}
-                          </h5>
-                          <p className="text-xs text-slate-500 truncate mt-0.5">
-                            {book.subtitle}
-                          </p>
-                          <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
-                            <span className="font-bold text-[#0a2540]">₹{book.prices.digital.price}</span>
-                            <span className="text-slate-300">•</span>
-                            <span>{book.images && book.images.length > 0 ? `${book.images.length} Image(s)` : 'Cover Image'}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="font-mono text-[10px] text-slate-400">{book.id}</span>
+
+                          {/* Book Thumbnail / Cover */}
+                          <div className="w-12 shrink-0">
+                            <BookCover book={book} size="sm" />
+                          </div>
+
+                          {/* Title, Subtitle, Category Switcher */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              {/* Inline Category Switcher */}
+                              <div className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2 py-0.5 rounded-lg transition-colors">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Cat:
+                                </span>
+                                <select
+                                  value={book.category}
+                                  onChange={(e) => {
+                                    const newCat = e.target.value as ExamCategory;
+                                    updateBook(book.id, { category: newCat });
+                                    showToast(`Assigned "${book.title}" to ${newCat}!`, 'success');
+                                  }}
+                                  className="text-[10px] font-extrabold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+                                  title="Change category for this product"
+                                >
+                                  <option value="IELTS">IELTS</option>
+                                  <option value="OET">OET</option>
+                                  <option value="PTE">PTE</option>
+                                  <option value="German">German</option>
+                                </select>
+                              </div>
+
+                              <span className="text-[9px] font-medium text-slate-500">
+                                {book.type}
+                              </span>
+                              {book.isBestSeller && (
+                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                  Bestseller
+                                </span>
+                              )}
+                            </div>
+
+                            <h5 className="text-sm font-bold text-slate-900 truncate">
+                              {book.title}
+                            </h5>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {book.subtitle}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
+                              <span className="font-bold text-[#0a2540]">₹{book.prices.digital.price}</span>
+                              <span className="text-slate-300">•</span>
+                              <span>
+                                {book.images && book.images.length > 0
+                                  ? `${book.images.length} Image(s)`
+                                  : 'Cover Image'}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-mono text-[10px] text-slate-400">{book.id}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Right: Interactive Reordering Controls */}
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        {/* Jump to Position Dropdown */}
-                        <div className="flex items-center gap-1.5 mr-2">
-                          <span className="text-[11px] font-bold text-slate-500 hidden md:inline">Position:</span>
-                          <select
-                            value={index + 1}
-                            onChange={(e) => {
-                              const newPos = parseInt(e.target.value, 10);
-                              if (!isNaN(newPos)) {
-                                setBookOrderPosition(book.id, newPos);
-                                showToast(`Moved "${book.title}" to position #${newPos}`, 'success');
-                              }
-                            }}
-                            className="px-2.5 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:border-slate-400 text-slate-800 shadow-xs focus:ring-2 focus:ring-emerald-500"
-                            title="Directly select position number"
+                        {/* Right: Interactive Reordering Controls */}
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          {/* Jump to Position Dropdown */}
+                          <div className="flex items-center gap-1.5 mr-1">
+                            <span className="text-[11px] font-bold text-slate-500 hidden md:inline">
+                              Rank:
+                            </span>
+                            <select
+                              value={index + 1}
+                              onChange={(e) => {
+                                const newPos = parseInt(e.target.value, 10);
+                                if (!isNaN(newPos)) {
+                                  handleSetPositionWithinCategory(book.id, newPos);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:border-slate-400 text-slate-800 shadow-xs focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                              title={`Directly select rank position ${
+                                arrangeCategory !== 'All' ? `within ${arrangeCategory}` : ''
+                              }`}
+                            >
+                              {visibleArrangeBooks.map((_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                  #{i + 1} {i === 0 ? '★ (#1 Featured)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Move To Top Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleMoveToTopWithinCategory(book.id)}
+                            disabled={isFirst}
+                            className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                            title={`Move directly to Top (#1) ${
+                              arrangeCategory !== 'All' ? `of ${arrangeCategory}` : ''
+                            }`}
                           >
-                            {books.map((_, i) => (
-                              <option key={i + 1} value={i + 1}>
-                                #{i + 1} {i < 5 ? '★ (Homepage Featured)' : ''}
-                              </option>
-                            ))}
-                          </select>
+                            <ChevronsUp className="w-4 h-4" />
+                          </button>
+
+                          {/* Move Up Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleMoveWithinCategory(book.id, 'up')}
+                            disabled={isFirst}
+                            className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                            title="Move up 1 position"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+
+                          {/* Move Down Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleMoveWithinCategory(book.id, 'down')}
+                            disabled={isLast}
+                            className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                            title="Move down 1 position"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+
+                          {/* Quick Edit Trigger */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditBook(book)}
+                            className="p-2 rounded-xl text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 transition-colors ml-1 cursor-pointer"
+                            title="Edit product details & images"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
                         </div>
-
-                        {/* Move To Top Button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBookOrderPosition(book.id, 1);
-                            showToast(`"${book.title}" moved to top position (#1)!`, 'success');
-                          }}
-                          disabled={isFirst}
-                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                          title="Move directly to Top (#1)"
-                        >
-                          <ChevronsUp className="w-4 h-4" />
-                        </button>
-
-                        {/* Move Up Button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            moveBookOrder(book.id, 'up');
-                            showToast(`Moved "${book.title}" up`, 'info');
-                          }}
-                          disabled={isFirst}
-                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                          title="Move up 1 position"
-                        >
-                          <ArrowUp className="w-4 h-4" />
-                        </button>
-
-                        {/* Move Down Button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            moveBookOrder(book.id, 'down');
-                            showToast(`Moved "${book.title}" down`, 'info');
-                          }}
-                          disabled={isLast}
-                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                          title="Move down 1 position"
-                        >
-                          <ArrowDown className="w-4 h-4" />
-                        </button>
-
-                        {/* Quick Edit Trigger */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditBook(book)}
-                          className="p-2 rounded-xl text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 transition-colors ml-1"
-                          title="Edit product details & images"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1747,6 +2019,106 @@ export const AdminView: React.FC = () => {
                               />
                               <span>Use Medical Cross Badge (+)</span>
                             </label>
+
+                            {/* Storefront Customer Redirection Destination */}
+                            <div className="pt-3 border-t border-slate-100 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-bold text-slate-800">
+                                  Storefront Redirection Destination
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (path.redirectTarget === 'product' && path.targetProductId) {
+                                      navigateToProduct(path.targetProductId);
+                                    } else {
+                                      navigateToCatalog(path.category);
+                                    }
+                                  }}
+                                  className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Test Click</span>
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <label
+                                  className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                    (path.redirectTarget || 'catalog') === 'catalog'
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                      : 'bg-slate-50 border-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`img_tab_redirect_${path.category}`}
+                                    value="catalog"
+                                    checked={(path.redirectTarget || 'catalog') === 'catalog'}
+                                    onChange={() => updateExamPath(path.category, { redirectTarget: 'catalog' })}
+                                    className="text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span>{path.category} Catalog (Arranged Order)</span>
+                                </label>
+
+                                <label
+                                  className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                    path.redirectTarget === 'product'
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                      : 'bg-slate-50 border-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`img_tab_redirect_${path.category}`}
+                                    value="product"
+                                    checked={path.redirectTarget === 'product'}
+                                    onChange={() => {
+                                      const categoryBooks = books.filter((b) => b.category === path.category);
+                                      const firstId = categoryBooks[0]?.id || books[0]?.id || '';
+                                      updateExamPath(path.category, {
+                                        redirectTarget: 'product',
+                                        targetProductId: path.targetProductId || firstId,
+                                      });
+                                    }}
+                                    className="text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span>Specific Product Page</span>
+                                </label>
+                              </div>
+
+                              {path.redirectTarget === 'product' && (
+                                <div className="mt-1">
+                                  <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                                    Target Product:
+                                  </label>
+                                  <select
+                                    value={path.targetProductId || ''}
+                                    onChange={(e) => updateExamPath(path.category, { targetProductId: e.target.value })}
+                                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-white font-medium"
+                                  >
+                                    <optgroup label={`${path.category} Products`}>
+                                      {books
+                                        .filter((b) => b.category === path.category)
+                                        .map((b) => (
+                                          <option key={b.id} value={b.id}>
+                                            {b.title} (₹{b.prices.digital.price})
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="All Products">
+                                      {books
+                                        .filter((b) => b.category !== path.category)
+                                        .map((b) => (
+                                          <option key={b.id} value={b.id}>
+                                            [{b.category}] {b.title}
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                  </select>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

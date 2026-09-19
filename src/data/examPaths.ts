@@ -8,6 +8,7 @@ export const DEFAULT_EXAM_PATHS: ExamPath[] = [
     bgImage: '/images/exams/ielts.jpg',
     badgeText: 'GB',
     scriptWords: ['Study', 'Work', 'Settle'],
+    redirectTarget: 'catalog',
   },
   {
     category: 'OET',
@@ -16,6 +17,7 @@ export const DEFAULT_EXAM_PATHS: ExamPath[] = [
     bgImage: '/images/exams/oet.jpg',
     isMedicalCross: true,
     scriptWords: ['Care', 'Connect', 'Grow'],
+    redirectTarget: 'catalog',
   },
   {
     category: 'PTE',
@@ -24,6 +26,7 @@ export const DEFAULT_EXAM_PATHS: ExamPath[] = [
     bgImage: '/images/exams/pte.jpg',
     badgeText: 'PTE',
     scriptWords: ['Global', 'Career', 'Ahead'],
+    redirectTarget: 'catalog',
   },
   {
     category: 'German',
@@ -32,5 +35,6 @@ export const DEFAULT_EXAM_PATHS: ExamPath[] = [
     bgImage: '/images/exams/german.jpg',
     badgeText: 'DE',
     scriptWords: ['Learn', 'Explore', 'Belong'],
+    redirectTarget: 'catalog',
   },
 ];

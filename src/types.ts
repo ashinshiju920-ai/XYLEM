@@ -114,5 +114,8 @@ export interface ExamPath {
   badgeText?: string;
   isMedicalCross?: boolean;
   scriptWords: string[];
+  redirectTarget?: 'catalog' | 'product';
+  targetProductId?: string;
 }
+
 

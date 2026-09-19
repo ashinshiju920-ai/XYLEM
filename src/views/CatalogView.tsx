@@ -19,7 +19,7 @@ export const CatalogView: React.FC = () => {
   const [selectedPriceRanges, setSelectedPriceRanges] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<'all' | 'digital' | 'physical'>('all');
-  const [sortBy, setSortBy] = useState<'popularity' | 'price-low' | 'price-high' | 'rating'>('popularity');
+  const [sortBy, setSortBy] = useState<'featured' | 'popularity' | 'price-low' | 'price-high' | 'rating'>('featured');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   // Filter categories
@@ -71,6 +71,12 @@ export const CatalogView: React.FC = () => {
 
       return true;
     }).sort((a, b) => {
+      if (sortBy === 'featured') {
+        const orderA = typeof a.order === 'number' ? a.order : 999;
+        const orderB = typeof b.order === 'number' ? b.order : 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return b.reviewCount - a.reviewCount;
+      }
       if (sortBy === 'popularity') return b.reviewCount - a.reviewCount;
       if (sortBy === 'rating') return b.rating - a.rating;
       if (sortBy === 'price-low') return a.prices.digital.price - b.prices.digital.price;
@@ -166,6 +172,7 @@ export const CatalogView: React.FC = () => {
             onChange={(e) => setSortBy(e.target.value as any)}
             className="text-xs font-semibold px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-hidden focus:border-emerald-600"
           >
+            <option value="featured">Featured / Custom Order</option>
             <option value="popularity">Popularity</option>
             <option value="rating">Highest Rated</option>
             <option value="price-low">Price: Low to High</option>

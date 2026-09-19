@@ -152,7 +152,13 @@ export const HomeView: React.FC = () => {
           {examPaths.map((path) => (
             <div
               key={path.category}
-              onClick={() => navigateToCatalog(path.category)}
+              onClick={() => {
+                if (path.redirectTarget === 'product' && path.targetProductId) {
+                  navigateToProduct(path.targetProductId);
+                } else {
+                  navigateToCatalog(path.category);
+                }
+              }}
               className="group relative h-72 sm:h-80 rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl cursor-pointer border border-slate-200 transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.99] touch-card flex flex-col justify-between"
             >
               {/* High-Resolution Background Image */}
