@@ -39,6 +39,8 @@ export interface Book {
   };
   samplePdfName: string;
   pdfUrl?: string;
+  imageUrl?: string;
+  coverImage?: string;
   adLink?: string;
   adText?: string;
   reviews?: Review[];

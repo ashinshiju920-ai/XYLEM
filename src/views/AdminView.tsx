@@ -25,10 +25,15 @@ import {
   BookMarked,
   ShieldCheck,
   Percent,
+  Copy,
+  Loader2,
+  Wifi,
+  Radio,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review } from '../types';
 import { BookCover } from '../components/BookCover';
+import { uploadImageToCloudinary } from '../utils/cloudSync';
 
 export const AdminView: React.FC = () => {
   const {
@@ -46,6 +51,10 @@ export const AdminView: React.FC = () => {
     setCurrentView,
     navigateToProduct,
     showToast,
+    isCloudSyncing,
+    lastCloudSync,
+    refreshProductsFromCloud,
+    syncBooksToCloud,
   } = useShop();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'pdfs' | 'reviews' | 'orders'>('overview');
@@ -90,6 +99,7 @@ export const AdminView: React.FC = () => {
     },
     samplePdfName: 'Xylem_Official_Guide_Sample.pdf',
     pdfUrl: '',
+    imageUrl: '',
     adLink: '',
     adText: 'Buy on Amazon / Partner Site',
     totalPages: 240,
@@ -99,6 +109,16 @@ export const AdminView: React.FC = () => {
   const [bookFormData, setBookFormData] = useState<Omit<Book, 'id'>>(initialBookForm);
   const [featureInput, setFeatureInput] = useState('');
   const [whatYouGetInput, setWhatYouGetInput] = useState('');
+  const [productSkuInput, setProductSkuInput] = useState<string>('PROD-1029');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{
+    type: 'idle' | 'uploading' | 'success' | 'error';
+    message: string;
+  }>({
+    type: 'idle',
+    message: '',
+  });
+  const bookImageInputRef = useRef<HTMLInputElement>(null);
 
   // PDF Manager State
   const [selectedBookForPdf, setSelectedBookForPdf] = useState<string>(books[0]?.id || '');
@@ -171,19 +191,57 @@ export const AdminView: React.FC = () => {
       coverTheme: { ...book.coverTheme },
       samplePdfName: book.samplePdfName || 'sample.pdf',
       pdfUrl: book.pdfUrl || '',
+      imageUrl: book.imageUrl || '',
       adLink: book.adLink || '',
       adText: book.adText || '',
       totalPages: book.totalPages || 200,
       reviews: book.reviews ? [...book.reviews] : [],
     });
+    setProductSkuInput(book.id || 'PROD-1029');
+    setUploadStatus({ type: 'idle', message: '' });
     setIsProductModalOpen(true);
   };
 
   // Handle Opening Add New Product
   const handleOpenAddNewBook = () => {
     setEditingBookId(null);
+    setProductSkuInput(`PROD-${Math.floor(1000 + Math.random() * 9000)}`);
+    setUploadStatus({ type: 'idle', message: '' });
     setBookFormData(initialBookForm);
     setIsProductModalOpen(true);
+  };
+
+  // Handle Uploading Product Image via Cloudflare Edge / Cloudinary & Real-Time Sync
+  const handleUploadProductImage = async (file: File) => {
+    if (!file) {
+      setUploadStatus({ type: 'error', message: 'Please choose an image file first.' });
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setUploadStatus({ type: 'uploading', message: 'Uploading to Cloudinary CDN & syncing...' });
+
+    const sku = productSkuInput.trim() || editingBookId || `PROD-${Date.now()}`;
+
+    try {
+      const uploadedUrl = await uploadImageToCloudinary(file, sku);
+      setBookFormData((prev) => ({ ...prev, imageUrl: uploadedUrl }));
+      setUploadStatus({ type: 'success', message: 'Image uploaded to Cloudinary!' });
+      showToast('Product image uploaded to Cloudinary!', 'success');
+
+      // If currently editing an existing product, immediately sync image change live to all users!
+      if (editingBookId) {
+        updateBook(editingBookId, { imageUrl: uploadedUrl });
+        showToast('Image change synced live in real-time to all website visitors!', 'success');
+      }
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setUploadStatus({ type: 'error', message: 'Error: ' + err.message });
+      showToast(`Upload failed: ${err.message}`, 'warning');
+    } finally {
+      setIsUploadingImage(false);
+      if (bookImageInputRef.current) bookImageInputRef.current.value = '';
+    }
   };
 
   // Save Book Form (Create or Update)
@@ -615,6 +673,48 @@ export const AdminView: React.FC = () => {
             ========================================================================= */}
         {activeTab === 'products' && (
           <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Real-time Cloud Sync Banner */}
+            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-[#0a2540] text-white p-4 rounded-2xl border border-emerald-500/30 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="relative flex h-3 w-3 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h5 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] flex items-center gap-1.5 text-white">
+                      <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                      <span>Cloudinary Live Real-Time Sync</span>
+                    </h5>
+                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Live to all users
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Images uploaded or updated are synced instantly to all active store visitors globally in real-time.
+                    {lastCloudSync && (
+                      <span className="ml-1 text-emerald-300 font-medium">
+                        • Synced at {lastCloudSync.toLocaleTimeString()}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshProductsFromCloud()}
+                  disabled={isCloudSyncing}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white border border-white/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  title="Check Cloudinary for remote catalog updates"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isCloudSyncing ? 'Syncing...' : 'Sync with Cloud'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Actions Bar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               {/* Category Filter Pills */}
@@ -677,6 +777,14 @@ export const AdminView: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
+                      {book.imageUrl && (
+                        <span
+                          className="p-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold flex items-center gap-1"
+                          title="Cloudinary Product Image"
+                        >
+                          <ImageIcon className="w-3 h-3" /> Image
+                        </span>
+                      )}
                       {book.pdfUrl && (
                         <span
                           className="p-1 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold flex items-center gap-1"
@@ -1418,10 +1526,193 @@ export const AdminView: React.FC = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSaveBook} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {/* SECTION 1: PRODUCT IMAGE & CLOUDINARY LIVE SYNC */}
+              <div className="space-y-3 p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0a2540] to-slate-950 text-white border border-slate-700/60 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+                      <ImageIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white flex items-center gap-2">
+                        <span>1. Product Cover Image</span>
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
+                          Cloudinary CDN
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-slate-300 mt-0.5">
+                        Uploaded image syncs in real-time to all live store visitors.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                      Live Real-Time Sync
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upload & Preview Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-1">
+                  {/* Left: Interactive Dropzone / Upload Box */}
+                  <div className="sm:col-span-7 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Product SKU / ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. PROD-1029"
+                          value={productSkuInput}
+                          onChange={(e) => setProductSkuInput(e.target.value)}
+                          className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Or Direct Image URL
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://res.cloudinary.com/..."
+                          value={bookFormData.imageUrl || ''}
+                          onChange={(e) => setBookFormData({ ...bookFormData, imageUrl: e.target.value })}
+                          className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Prominent File Upload Box */}
+                    <div
+                      onClick={() => bookImageInputRef.current?.click()}
+                      className="border-2 border-dashed border-sky-500/40 hover:border-sky-400/80 bg-sky-950/20 hover:bg-sky-950/40 rounded-xl p-4 text-center cursor-pointer transition-all group"
+                    >
+                      <input
+                        type="file"
+                        ref={bookImageInputRef}
+                        accept="image/*"
+                        disabled={isUploadingImage}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleUploadProductImage(f);
+                        }}
+                        className="hidden"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        {isUploadingImage ? (
+                          <>
+                            <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
+                            <p className="text-xs font-bold text-sky-300">Uploading to Cloudinary CDN...</p>
+                            <p className="text-[10px] text-slate-400">Broadcasting live image update</p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Upload className="w-4 h-4" />
+                            </div>
+                            <p className="text-xs font-bold text-white">
+                              {bookFormData.imageUrl ? 'Click to Replace Product Image' : 'Click to Upload Product Image'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              PNG, JPG, WebP supported • Direct Cloudinary Edge Upload
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upload Status Alert */}
+                    {uploadStatus.message && (
+                      <div
+                        className={`text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-2 ${
+                          uploadStatus.type === 'uploading'
+                            ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50'
+                            : uploadStatus.type === 'success'
+                            ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
+                            : 'bg-rose-900/40 text-rose-300 border border-rose-700/50'
+                        }`}
+                      >
+                        {uploadStatus.type === 'uploading' && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
+                        {uploadStatus.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                        {uploadStatus.type === 'error' && <AlertCircle className="w-3.5 h-3.5 text-rose-400" />}
+                        <span>{uploadStatus.message}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Live Preview Box */}
+                  <div className="sm:col-span-5 bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col items-center justify-center min-h-[170px]">
+                    {bookFormData.imageUrl ? (
+                      <div className="w-full flex flex-col items-center gap-2">
+                        <div className="relative group">
+                          <img
+                            src={bookFormData.imageUrl}
+                            alt="Cloudinary Product Preview"
+                            className="w-24 h-32 object-cover rounded-lg border border-slate-700 shadow-md"
+                          />
+                          <span className="absolute bottom-1 right-1 bg-emerald-500 text-slate-950 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow">
+                            Live CDN
+                          </span>
+                        </div>
+
+                        <p className="text-[10px] font-mono text-slate-400 truncate max-w-full text-center px-2">
+                          {bookFormData.imageUrl}
+                        </p>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (bookFormData.imageUrl) {
+                                navigator.clipboard.writeText(bookFormData.imageUrl);
+                                showToast('Copied Cloudinary URL to clipboard!', 'info');
+                              }
+                            }}
+                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-semibold flex items-center gap-1 border border-slate-700"
+                          >
+                            <Copy className="w-3 h-3" /> Copy URL
+                          </button>
+                          <a
+                            href={bookFormData.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded bg-sky-900/40 hover:bg-sky-800/60 text-[10px] text-sky-300 font-semibold flex items-center gap-1 border border-sky-700/50"
+                          >
+                            <ExternalLink className="w-3 h-3" /> View Full
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBookFormData((prev) => ({ ...prev, imageUrl: '' }));
+                              setUploadStatus({ type: 'idle', message: '' });
+                            }}
+                            className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/60 text-[10px] text-rose-300 font-semibold flex items-center gap-1 border border-rose-800/50"
+                          >
+                            <Trash2 className="w-3 h-3" /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center p-3 space-y-2 text-slate-500">
+                        <ImageIcon className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
+                        <p className="text-xs font-semibold text-slate-400">No Image Uploaded Yet</p>
+                        <p className="text-[10px] text-slate-500 max-w-[180px]">
+                          Upload a cover image above or select a gradient theme below.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Basic Details */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
-                  1. Book Information
+                  2. Book Information
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
@@ -1614,15 +1905,21 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cover Theme Customizer */}
+              {/* Cover Gradients & 3D Visualizer */}
               <div className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
-                  3. Cover Design & Styling
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                <div className="flex items-center justify-between border-b pb-1">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    4. Cover Gradients & 3D Visualizer
+                  </h4>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Theme / Fallback
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center pt-1">
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-bold text-slate-700">Cover Gradient Theme</label>
+                      <label className="text-xs font-bold text-slate-700">Cover Gradient Theme (Fallback)</label>
                       <div className="grid grid-cols-3 gap-2 mt-1">
                         {gradientPresets.map((preset) => (
                           <button
@@ -1672,7 +1969,7 @@ export const AdminView: React.FC = () => {
 
                   {/* Cover Live Preview */}
                   <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                    <p className="text-[11px] font-bold text-slate-400 mb-2">Cover Preview</p>
+                    <p className="text-[11px] font-bold text-slate-400 mb-2">3D Book Live Preview</p>
                     <BookCover
                       book={{
                         ...bookFormData,

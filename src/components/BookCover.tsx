@@ -158,94 +158,122 @@ export const BookCover: React.FC<BookCoverProps> = ({
         <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/40 via-white/10 to-transparent pointer-events-none z-20" />
         <div className="absolute left-3 top-0 bottom-0 w-[1px] bg-black/20 pointer-events-none z-20" />
 
-        {/* Top Header on Book Cover */}
-        <div className="relative z-10 text-center pt-1">
-          <div className="flex items-center justify-center space-x-1 mb-1">
-            <span
-              className={`text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase ${
-                isLightCover ? 'text-slate-700' : 'text-slate-200'
-              }`}
-            >
-              XYLEM LEARNING
-            </span>
-          </div>
-          <div
-            className={`text-[7px] sm:text-[8px] uppercase tracking-wider font-semibold ${
-              isLightCover ? 'text-slate-500' : 'text-slate-300/80'
-            }`}
-          >
-            {book.subtitle.includes('Academic') ? 'Academic & General' : 'Official Preparation'}
-          </div>
-        </div>
-
-        {/* Center Title Display */}
-        <div className="relative z-10 my-auto py-2">
-          <h3
-            className={`font-black tracking-tight leading-none ${
-              isLightCover ? 'text-slate-900' : 'text-white'
-            } font-['Plus_Jakarta_Sans',sans-serif]`}
-            style={{
-              fontSize: size === 'sm' ? '14px' : size === 'md' ? '22px' : size === 'lg' ? '30px' : '36px',
-            }}
-          >
-            {theme.title}
-          </h3>
-
-          <div
-            className={`font-bold tracking-wider mt-1 text-[9px] sm:text-[11px] ${
-              isLightCover ? 'text-teal-700' : 'text-slate-200'
-            }`}
-          >
-            {theme.sub}
-          </div>
-
-          <div
-            className={`text-[7px] sm:text-[9px] mt-1 font-medium ${
-              isLightCover ? 'text-slate-600' : 'text-slate-300'
-            } line-clamp-2 px-1`}
-          >
-            WITH MOCK TESTS
-          </div>
-
-          {/* Badge Circle in center or bottom */}
-          <div className="mt-2 flex justify-center">
-            <div
-              className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold shadow-md ${theme.badgeBg}`}
-            >
-              {book.coverTheme.badgeText || '500+ MOCK TESTS'}
+        {book.imageUrl || book.coverImage ? (
+          <>
+            {/* Custom Uploaded Cloudinary / Product Image */}
+            <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-slate-900">
+              <img
+                src={book.imageUrl || book.coverImage}
+                alt={book.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
-          </div>
-        </div>
+            {/* Optional badge overlay if specified */}
+            {book.coverTheme?.badgeText && (
+              <div className="relative z-10 mt-auto pt-2 flex justify-center pb-1">
+                <div
+                  className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold shadow-md bg-black/75 backdrop-blur-xs text-white border border-white/20"
+                >
+                  {book.coverTheme.badgeText}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Top Header on Book Cover */}
+            <div className="relative z-10 text-center pt-1">
+              <div className="flex items-center justify-center space-x-1 mb-1">
+                <span
+                  className={`text-[8px] sm:text-[9px] font-bold tracking-[0.2em] uppercase ${
+                    isLightCover ? 'text-slate-700' : 'text-slate-200'
+                  }`}
+                >
+                  XYLEM LEARNING
+                </span>
+              </div>
+              <div
+                className={`text-[7px] sm:text-[8px] uppercase tracking-wider font-semibold ${
+                  isLightCover ? 'text-slate-500' : 'text-slate-300/80'
+                }`}
+              >
+                {book.subtitle.includes('Academic') ? 'Academic & General' : 'Official Preparation'}
+              </div>
+            </div>
 
-        {/* Background Motif Graphic */}
-        {theme.motif}
+            {/* Center Title Display */}
+            <div className="relative z-10 my-auto py-2">
+              <h3
+                className={`font-black tracking-tight leading-none ${
+                  isLightCover ? 'text-slate-900' : 'text-white'
+                } font-['Plus_Jakarta_Sans',sans-serif]`}
+                style={{
+                  fontSize: size === 'sm' ? '14px' : size === 'md' ? '22px' : size === 'lg' ? '30px' : '36px',
+                }}
+              >
+                {theme.title}
+              </h3>
 
-        {/* Bottom Logo & Footer Bar on Book Cover */}
-        <div className="relative z-10 pt-2 border-t border-white/10 flex items-center justify-between text-left">
-          <div className="flex flex-col">
-            <span
-              className={`text-[7px] font-bold tracking-widest uppercase ${
-                isLightCover ? 'text-slate-800' : 'text-white'
-              }`}
-            >
-              XYLEM
-            </span>
-            <span
-              className={`text-[5px] tracking-wider uppercase font-semibold ${
-                isLightCover ? 'text-teal-700' : 'text-teal-400'
-              }`}
-            >
-              LEARNING
-            </span>
-          </div>
-          <div
-            className={`text-[6px] tracking-tight font-medium ${
-              isLightCover ? 'text-slate-500' : 'text-slate-400'
-            }`}
-          >
-            Study Guide
-          </div>
-        </div>
+              <div
+                className={`font-bold tracking-wider mt-1 text-[9px] sm:text-[11px] ${
+                  isLightCover ? 'text-teal-700' : 'text-slate-200'
+                }`}
+              >
+                {theme.sub}
+              </div>
+
+              <div
+                className={`text-[7px] sm:text-[9px] mt-1 font-medium ${
+                  isLightCover ? 'text-slate-600' : 'text-slate-300'
+                }`}
+              >
+                WITH MOCK TESTS
+              </div>
+
+              {/* Badge Circle in center or bottom */}
+              <div className="mt-2 flex justify-center">
+                <div
+                  className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold shadow-md ${theme.badgeBg}`}
+                >
+                  {book.coverTheme.badgeText || '500+ MOCK TESTS'}
+                </div>
+              </div>
+            </div>
+
+            {/* Background Motif Graphic */}
+            {theme.motif}
+
+            {/* Bottom Logo & Footer Bar on Book Cover */}
+            <div className="relative z-10 pt-2 border-t border-white/10 flex items-center justify-between text-left">
+              <div className="flex flex-col">
+                <span
+                  className={`text-[7px] font-bold tracking-widest uppercase ${
+                    isLightCover ? 'text-slate-800' : 'text-white'
+                  }`}
+                >
+                  XYLEM
+                </span>
+                <span
+                  className={`text-[5px] tracking-wider uppercase font-semibold ${
+                    isLightCover ? 'text-teal-700' : 'text-teal-400'
+                  }`}
+                >
+                  LEARNING
+                </span>
+              </div>
+              <div
+                className={`text-[6px] tracking-tight font-medium ${
+                  isLightCover ? 'text-slate-500' : 'text-slate-400'
+                }`}
+              >
+                Study Guide
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Subtle glossy sheen line across book */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none z-10" />

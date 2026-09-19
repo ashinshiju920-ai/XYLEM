@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Book, BookFormat, CartItem, Order, ShippingInfo, ExamCategory, ViewType, Review, Testimonial } from '../types';
 import { BOOKS } from '../data/books';
 import { TESTIMONIALS } from '../data/testimonials';
+import { saveCatalogToCloud, fetchCatalogFromCloud, subscribeToRealtimeBroadcast } from '../utils/cloudSync';
 
 interface Toast {
   id: string;
@@ -26,6 +27,12 @@ interface ShopContextType {
   updateBook: (id: string, updated: Partial<Book>) => void;
   deleteBook: (id: string) => void;
   resetBooksToDefault: () => void;
+
+  // Real-time Cloud Synchronization
+  isCloudSyncing: boolean;
+  lastCloudSync: Date | null;
+  refreshProductsFromCloud: () => Promise<void>;
+  syncBooksToCloud: (booksToSync?: Book[]) => Promise<void>;
 
   // Testimonials & Reviews
   testimonials: Testimonial[];
@@ -134,6 +141,82 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Failed to save books to storage:', e);
     }
   }, [books]);
+
+  // Real-time Cloud Synchronization State
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastCloudSync, setLastCloudSync] = useState<Date | null>(null);
+  const localCatalogVersionRef = useRef<number>(0);
+  const isFetchingRemoteRef = useRef<boolean>(false);
+
+  const triggerCloudSync = async (booksToSync: Book[]) => {
+    setIsCloudSyncing(true);
+    try {
+      const res = await saveCatalogToCloud(booksToSync);
+      if (res.success) {
+        if (res.version) localCatalogVersionRef.current = res.version;
+        setLastCloudSync(new Date());
+      }
+    } catch (e) {
+      console.error('Real-time sync to cloud failed:', e);
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  const syncBooksToCloud = async (customBooks?: Book[]) => {
+    await triggerCloudSync(customBooks || books);
+  };
+
+  const refreshProductsFromCloud = async () => {
+    if (isFetchingRemoteRef.current) return;
+    isFetchingRemoteRef.current = true;
+    try {
+      const remote = await fetchCatalogFromCloud();
+      if (remote && Array.isArray(remote.books) && remote.books.length > 0) {
+        const remoteVersion = remote.version || 0;
+        // If remote version is newer, update state live
+        if (remoteVersion > localCatalogVersionRef.current) {
+          localCatalogVersionRef.current = remoteVersion;
+          setBooks(remote.books);
+          setLastCloudSync(new Date());
+        }
+      }
+    } catch (err) {
+      console.warn('Real-time background sync fetch error:', err);
+    } finally {
+      isFetchingRemoteRef.current = false;
+    }
+  };
+
+  // Real-time listeners: initial fetch, cross-tab broadcast, 4-second poller, tab visibility
+  useEffect(() => {
+    refreshProductsFromCloud();
+
+    const unsubscribe = subscribeToRealtimeBroadcast((newBooks, version) => {
+      localCatalogVersionRef.current = version;
+      setBooks(newBooks);
+      setLastCloudSync(new Date());
+    });
+
+    const interval = setInterval(() => {
+      refreshProductsFromCloud();
+    }, 4000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshProductsFromCloud();
+      }
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Persistent Testimonials State
   const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
@@ -373,20 +456,30 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addBook = (newBook: Book) => {
-    setBooks((prev) => [newBook, ...prev]);
-    showToast(`Book "${newBook.title}" published to catalog!`, 'success');
+    setBooks((prev) => {
+      const updated = [newBook, ...prev];
+      triggerCloudSync(updated);
+      return updated;
+    });
+    showToast(`Book "${newBook.title}" published & synced live to all users!`, 'success');
   };
 
   const updateBook = (id: string, updated: Partial<Book>) => {
-    setBooks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...updated } : b))
-    );
-    showToast('Book updated successfully!', 'success');
+    setBooks((prev) => {
+      const next = prev.map((b) => (b.id === id ? { ...b, ...updated } : b));
+      triggerCloudSync(next);
+      return next;
+    });
+    showToast('Product updated & synced in real-time to all users!', 'success');
   };
 
   const deleteBook = (id: string) => {
-    setBooks((prev) => prev.filter((b) => b.id !== id));
-    showToast('Book removed from store', 'info');
+    setBooks((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      triggerCloudSync(next);
+      return next;
+    });
+    showToast('Book removed & synced live across all clients', 'info');
   };
 
   const resetBooksToDefault = () => {
@@ -394,7 +487,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTestimonials(TESTIMONIALS);
     localStorage.removeItem('xylem_books_data');
     localStorage.removeItem('xylem_testimonials_data');
-    showToast('Catalog restored to default books & reviews', 'info');
+    triggerCloudSync(BOOKS);
+    showToast('Catalog restored to default books & synced', 'info');
   };
 
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
@@ -587,6 +681,11 @@ startxref
         navigateToProduct,
         navigateToCatalog,
         openCart,
+
+        isCloudSyncing,
+        lastCloudSync,
+        refreshProductsFromCloud,
+        syncBooksToCloud,
       }}
     >
       {children}

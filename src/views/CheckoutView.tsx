@@ -31,6 +31,7 @@ import { BookCover } from '../components/BookCover';
 import { PaymentMethod, Book } from '../types';
 import { BOOKS } from '../data/books';
 import { XylemLogo } from '../components/XylemLogo';
+import { loadCashfreeSDK, createCashfreeOrder, GOOGLE_SHEET_COPY_URL } from '../utils/cashfree';
 
 export const CheckoutView: React.FC = () => {
   const {
@@ -106,6 +107,26 @@ export const CheckoutView: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Listen for Cashfree redirect callback if redirected
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const orderIdParam = urlParams.get('order_id');
+      const cfStatus = urlParams.get('cf_status');
+
+      if (orderIdParam || cfStatus === 'success') {
+        placeOrder('card');
+        showToast('Cashfree payment confirmed! Opening your study materials template...', 'success');
+        try {
+          window.open(GOOGLE_SHEET_COPY_URL, '_blank');
+        } catch (e) {
+          console.warn('Could not auto-open Google Sheet template:', e);
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
+
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
     if (couponInput.trim()) {
@@ -116,21 +137,66 @@ export const CheckoutView: React.FC = () => {
 
   const handlePayNow = async () => {
     setIsProcessing(true);
-    setProcessingStatus('Initiating 256-bit encrypted transaction...');
+    setProcessingStatus('Connecting to Cashfree Secure Gateway...');
 
-    setTimeout(() => {
-      setProcessingStatus(`Authorizing payment with ${paymentMethod.toUpperCase()} gateway...`);
-    }, 800);
+    try {
+      // 1. Initialize Cashfree SDK v3 in sandbox mode
+      const cashfree = await loadCashfreeSDK();
+      if (!cashfree) {
+        throw new Error('Cashfree SDK is not available');
+      }
 
-    setTimeout(() => {
-      setProcessingStatus('Verifying cryptographic response & generating PDF license...');
-    }, 1600);
+      setProcessingStatus('Creating secure Cashfree order session...');
 
-    setTimeout(async () => {
-      setIsProcessing(false);
+      // 2. Create Cashfree order session via Cloudflare Pages endpoint
+      const orderData = await createCashfreeOrder({
+        cart,
+        couponCode: appliedCoupon,
+        shippingInfo,
+        requestedAmount: total,
+      });
+
+      if (!orderData || !orderData.payment_session_id) {
+        throw new Error('Failed to generate Cashfree payment session');
+      }
+
+      setProcessingStatus('Launching Cashfree Checkout Modal...');
+
+      // 3. Trigger Cashfree modal checkout
+      const checkoutResponse = await cashfree.checkout({
+        paymentSessionId: orderData.payment_session_id,
+        redirectTarget: '_modal',
+      });
+
+      // 4. Handle checkout result
+      if (checkoutResponse && checkoutResponse.error) {
+        const errorMsg = checkoutResponse.error.message || 'Payment was not completed';
+        if (!errorMsg.toLowerCase().includes('closed')) {
+          throw new Error(errorMsg);
+        }
+        return;
+      }
+
+      // If user completed payment in modal or redirected
       await placeOrder(paymentMethod);
       showToast('Payment successful! Your order has been placed.', 'success');
-    }, 2400);
+
+      // Direct customer to Google Sheet copy template link
+      try {
+        window.open(GOOGLE_SHEET_COPY_URL, '_blank');
+      } catch (e) {
+        console.warn('Could not auto-open Google Sheet template:', e);
+      }
+    } catch (err: any) {
+      console.error('Cashfree checkout error:', err);
+      const msg = err.message || 'Payment could not be completed';
+      if (!msg.toLowerCase().includes('closed')) {
+        showToast(msg, 'warning');
+      }
+    } finally {
+      setIsProcessing(false);
+      setProcessingStatus('');
+    }
   };
 
   return (
@@ -396,7 +462,7 @@ export const CheckoutView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-3 h-3 text-sky-600" />
-                  <span>Razorpay Secure</span>
+                  <span>Cashfree Secure</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CreditCard className="w-3 h-3 text-emerald-600" />

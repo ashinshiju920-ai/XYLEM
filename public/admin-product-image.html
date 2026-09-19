@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Update Product Image</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f1f5f9;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .admin-card {
+      background: #ffffff;
+      padding: 28px;
+      border-radius: 12px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      margin-top: 0;
+      color: #0f172a;
+      font-size: 1.25rem;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #334155;
+    }
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    button {
+      width: 100%;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .preview-box {
+      margin-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 16px;
+      text-align: center;
+      display: none;
+    }
+    .preview-box img {
+      max-width: 100%;
+      max-height: 240px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      object-fit: cover;
+    }
+    .status-msg {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .status-success { color: #16a34a; }
+    .status-error { color: #dc2626; }
+  </style>
+</head>
+<body>
+
+  <div class="admin-card">
+    <h2>Update Product Image</h2>
+    
+    <div class="form-group">
+      <label for="productId">Product SKU / ID</label>
+      <input type="text" id="productId" placeholder="e.g. PROD-1029" value="PROD-1029" />
+    </div>
+
+    <div class="form-group">
+      <label for="imageFile">Select New Image</label>
+      <input type="file" id="imageFile" accept="image/*" />
+    </div>
+
+    <button id="uploadBtn" onclick="handleImageUpdate()">Upload & Update Image</button>
+
+    <div id="status" class="status-msg"></div>
+
+    <div id="previewBox" class="preview-box">
+      <label>Live Cloudinary Preview</label>
+      <img id="previewImg" src="" alt="Product Image" />
+      <p style="font-size: 0.75rem; color: #64748b; word-break: break-all;" id="urlDisplay"></p>
+    </div>
+  </div>
+
+  <script>
+    async function handleImageUpdate() {
+      const productId = document.getElementById('productId').value.trim() || 'unassigned';
+      const fileInput = document.getElementById('imageFile');
+      const uploadBtn = document.getElementById('uploadBtn');
+      const status = document.getElementById('status');
+      const previewBox = document.getElementById('previewBox');
+      const previewImg = document.getElementById('previewImg');
+      const urlDisplay = document.getElementById('urlDisplay');
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        status.className = 'status-msg status-error';
+        status.textContent = 'Please choose an image file first.';
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading to Cloudinary...';
+      status.textContent = '';
+
+      const formData = new FormData();
+      formData.append('image', fileInput.files[0]);
+      formData.append('productId', productId);
+
+      try {
+        let imageUrl = '';
+
+        try {
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              imageUrl = data.imageUrl;
+            } else {
+              throw new Error(data.error || 'Failed to upload image.');
+            }
+          } else {
+            throw new Error(`Edge endpoint status ${response.status}`);
+          }
+        } catch (edgeErr) {
+          // Fallback direct to Cloudinary if running in local Vite dev without Pages Functions
+          console.warn('Edge endpoint failed, attempting direct Cloudinary fallback:', edgeErr);
+          const cloudName = 'gog1fpsj';
+          const apiKey = '493453349916754';
+          const apiSecret = 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
+          const timestamp = Math.round(new Date().getTime() / 1000);
+          const folder = 'ecommerce_products';
+          const publicId = `product_${productId}_${timestamp}`;
+
+          const paramsToSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+          const encoder = new TextEncoder();
+          const data = encoder.encode(paramsToSign);
+          const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const signature = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+          const directData = new FormData();
+          directData.append('file', fileInput.files[0]);
+          directData.append('api_key', apiKey);
+          directData.append('timestamp', timestamp.toString());
+          directData.append('folder', folder);
+          directData.append('public_id', publicId);
+          directData.append('signature', signature);
+
+          const directRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+            method: 'POST',
+            body: directData,
+          });
+          const directJson = await directRes.json();
+          if (directRes.ok && directJson.secure_url) {
+            imageUrl = directJson.secure_url;
+          } else {
+            throw new Error(directJson.error?.message || edgeErr.message || 'Upload failed');
+          }
+        }
+
+        status.className = 'status-msg status-success';
+        status.textContent = 'Image updated successfully!';
+        
+        previewImg.src = imageUrl;
+        urlDisplay.textContent = imageUrl;
+        previewBox.style.display = 'block';
+
+        // Update local xylem_books_data if productId matches an existing book
+        try {
+          const stored = localStorage.getItem('xylem_books_data');
+          if (stored) {
+            const books = JSON.parse(stored);
+            const idx = books.findIndex(b => b.id === productId);
+            if (idx !== -1) {
+              books[idx].imageUrl = imageUrl;
+              localStorage.setItem('xylem_books_data', JSON.stringify(books));
+              console.log('Synchronized book imageUrl in localStorage');
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      } catch (err) {
+        status.className = 'status-msg status-error';
+        status.textContent = 'Error: ' + err.message;
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload & Update Image';
+      }
+    }
+  </script>
+
+</body>
+</html>

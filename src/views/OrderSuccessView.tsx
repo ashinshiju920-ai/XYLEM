@@ -7,9 +7,11 @@ import {
   Mail,
   ShieldCheck,
   Package,
+  ExternalLink,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
+import { GOOGLE_SHEET_COPY_URL } from '../utils/cashfree';
 
 export const OrderSuccessView: React.FC = () => {
   const {
@@ -58,6 +60,33 @@ export const OrderSuccessView: React.FC = () => {
           <span>Order ID: <strong className="font-mono text-slate-900">#{currentOrder.id}</strong></span>
           <span>•</span>
           <span>Date: <strong>{currentOrder.date}</strong></span>
+        </div>
+      </div>
+
+      {/* GOOGLE SHEET TEMPLATE DELIVERY CARD */}
+      <div className="bg-gradient-to-r from-emerald-600 via-[#00875a] to-[#0a2540] rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-emerald-400/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-2.5 py-1 rounded-full inline-block">
+              Study Planner & Template Access
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white">
+              Official Google Sheet / Copy Template Link
+            </h2>
+            <p className="text-xs text-slate-200 max-w-lg">
+              Click below to automatically create your personal copy in Google Sheets with full study schedule, mock tracker, and band score analytics.
+            </p>
+          </div>
+
+          <a
+            href={GOOGLE_SHEET_COPY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-emerald-800 hover:bg-emerald-50 text-xs sm:text-sm font-bold rounded-2xl shadow-md transition-all hover:scale-105 active:scale-95 shrink-0"
+          >
+            <span>Open Google Sheet /copy Template</span>
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       </div>
 

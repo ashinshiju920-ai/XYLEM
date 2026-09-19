@@ -122,9 +122,17 @@ export const ProductDetailView: React.FC = () => {
                 }`}
               >
                 {idx === 0 ? (
-                  <div className="w-full h-full bg-slate-900 rounded-xs flex items-center justify-center text-[7px] text-white font-bold">
-                    Cover
-                  </div>
+                  book.imageUrl || book.coverImage ? (
+                    <img
+                      src={book.imageUrl || book.coverImage}
+                      alt={book.title}
+                      className="w-full h-full object-cover rounded-xs"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-slate-900 rounded-xs flex items-center justify-center text-[7px] text-white font-bold">
+                      Cover
+                    </div>
+                  )
                 ) : idx === 1 ? (
                   <div className="w-full h-full bg-slate-100 rounded-xs flex flex-col items-center justify-center p-0.5 text-[6px] text-slate-600">
                     <div className="w-3/4 h-1 bg-slate-300 mb-0.5"></div>
