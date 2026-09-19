@@ -134,7 +134,7 @@ export const CheckoutView: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] overflow-x-hidden pb-16">
+    <div className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] overflow-x-hidden pb-28 sm:pb-16">
       {/* Decorative Botanical Leaf Accents */}
       <div className="absolute top-0 right-0 pointer-events-none z-10 w-44 sm:w-64 opacity-80 select-none">
         <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
@@ -250,52 +250,52 @@ export const CheckoutView: React.FC = () => {
         </div>
 
         {/* 2. PROGRESS STEPPER (Shipping -> Payment -> Review) */}
-        <div className="flex items-center justify-start gap-3 sm:gap-6 py-2 px-1 text-xs">
+        <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-6 py-2 px-1 text-xs w-full">
           {/* Step 1: Shipping */}
           <button
             onClick={() => setActiveStep(1)}
-            className="flex items-center gap-2.5 text-left cursor-pointer group transition-opacity"
+            className="flex items-center gap-2 text-left cursor-pointer group transition-opacity shrink-0"
           >
-            <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
               ✓
             </div>
             <div>
-              <div className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+              <div className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors text-[11px] sm:text-xs">
                 Shipping
               </div>
-              <div className="text-[10px] text-slate-500 font-medium">Your details</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-500 font-medium hidden xs:block">Your details</div>
             </div>
           </button>
 
-          <div className="w-8 sm:w-16 h-[2px] bg-emerald-400/80 rounded-full" />
+          <div className="flex-1 sm:w-16 max-w-16 h-[2px] bg-emerald-400/80 rounded-full" />
 
           {/* Step 2: Payment (Active) */}
           <button
             onClick={() => setActiveStep(2)}
-            className="flex items-center gap-2.5 text-left cursor-pointer"
+            className="flex items-center gap-2 text-left cursor-pointer shrink-0"
           >
-            <div className="w-7 h-7 rounded-full bg-[#00875a] text-white flex items-center justify-center font-bold text-xs ring-4 ring-emerald-100 shadow-xs">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#00875a] text-white flex items-center justify-center font-bold text-xs ring-4 ring-emerald-100 shadow-xs">
               2
             </div>
             <div>
-              <div className="font-bold text-emerald-800">Payment</div>
-              <div className="text-[10px] text-slate-500 font-medium">Choose payment method</div>
+              <div className="font-bold text-emerald-800 text-[11px] sm:text-xs">Payment</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-500 font-medium hidden xs:block">Choose method</div>
             </div>
           </button>
 
-          <div className="w-8 sm:w-16 h-[2px] bg-slate-200 rounded-full" />
+          <div className="flex-1 sm:w-16 max-w-16 h-[2px] bg-slate-200 rounded-full" />
 
           {/* Step 3: Review */}
           <button
             onClick={() => setActiveStep(3)}
-            className="flex items-center gap-2.5 text-left cursor-pointer opacity-70 hover:opacity-100"
+            className="flex items-center gap-2 text-left cursor-pointer opacity-70 hover:opacity-100 shrink-0"
           >
-            <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-300 text-slate-600 flex items-center justify-center font-bold text-xs">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-100 border border-slate-300 text-slate-600 flex items-center justify-center font-bold text-xs">
               3
             </div>
             <div>
-              <div className="font-semibold text-slate-700">Review</div>
-              <div className="text-[10px] text-slate-400">Confirm your order</div>
+              <div className="font-semibold text-slate-700 text-[11px] sm:text-xs">Review</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-400 hidden xs:block">Confirm order</div>
             </div>
           </button>
         </div>
@@ -1311,6 +1311,36 @@ export const CheckoutView: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Sticky Payment Bar (Instant 1-Tap Mobile Conversion) */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-4 py-3 shadow-[0_-8px_25px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 animate-in slide-in-from-bottom-3 duration-200">
+        <div>
+          <div className="text-[10px] text-slate-500 font-medium leading-none mb-1">Total Payable</div>
+          <div className="text-lg font-extrabold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
+            ₹{total}
+          </div>
+        </div>
+
+        <button
+          id="mobile-sticky-pay-btn"
+          disabled={isProcessing}
+          onClick={handlePayNow}
+          className="flex-1 py-3 px-5 rounded-full bg-gradient-to-r from-[#00875a] via-[#009b67] to-[#00744e] text-white text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] shadow-md shadow-emerald-700/25 active:scale-95 transition-all flex items-center justify-center gap-2"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Verifying...</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-3.5 h-3.5" />
+              <span>Pay ₹{total} via {paymentMethod.toUpperCase()}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </>
+          )}
+        </button>
+      </div>
 
       {/* PAYMENT PROCESSING OVERLAY MODAL */}
       {isProcessing && (

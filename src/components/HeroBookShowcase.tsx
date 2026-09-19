@@ -46,14 +46,30 @@ export const HeroBookShowcase: React.FC = () => {
   const germanBook = books.find((b) => b.category === 'German') || books[3] || books[0];
 
   return (
-    <div className="relative w-full max-w-xl mx-auto flex items-center justify-center select-none py-2">
+    <div className="relative w-full max-w-xl mx-auto flex items-center justify-center select-none py-2 sm:py-4">
       {/* Ambient Breathing Emerald Glow behind the showcase */}
       <div className="absolute -inset-4 bg-gradient-to-r from-emerald-400/20 via-teal-300/15 to-cyan-400/20 rounded-[48px] blur-3xl -z-10 animate-pulse-glow pointer-events-none" />
+
+      {/* Floating Animated Badge 1: Top Left Rating Pill */}
+      <div className="hidden sm:flex absolute -top-2 -left-3 z-20 items-center gap-1.5 px-3.5 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-emerald-200/80 shadow-lg animate-float-gentle text-xs font-bold text-slate-800">
+        <span className="text-amber-400">★</span>
+        <span>4.9/5 Rating</span>
+        <span className="text-[10px] text-slate-400 font-normal">(2.8k+ Reviews)</span>
+      </div>
+
+      {/* Floating Animated Badge 2: Bottom Right Mocks Pill */}
+      <div
+        style={{ animationDelay: '1.5s' }}
+        className="hidden sm:flex absolute -bottom-2 -right-3 z-20 items-center gap-1.5 px-3.5 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-emerald-200/80 shadow-lg animate-float-gentle text-xs font-bold text-emerald-800"
+      >
+        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+        <span>⚡ 500+ Verified Practice Mocks</span>
+      </div>
 
       {/* Main 3D Perspective Wrapper */}
       <div
         style={{ perspective: 1200 }}
-        className="w-full transition-transform duration-200 ease-out animate-float-gentle"
+        className="w-full transition-transform duration-200 ease-out animate-float-gentle touch-manipulation"
       >
         <div
           ref={cardRef}
@@ -64,13 +80,13 @@ export const HeroBookShowcase: React.FC = () => {
             transition: 'transform 0.15s cubic-bezier(0.2, 0, 0, 1)',
             transformStyle: 'preserve-3d',
           }}
-          className="relative rounded-[32px] sm:rounded-[38px] overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,135,90,0.2)] border border-[#d2ebe5] bg-[#f2f9f8] group cursor-pointer"
+          className="relative rounded-[28px] sm:rounded-[38px] overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,135,90,0.2)] border border-[#d2ebe5] bg-[#f2f9f8] group cursor-pointer"
         >
           {/* Base High-Resolution Showcase Graphic */}
           <img
             src="/hero-books-showcase.jpg"
             alt="Xylem Learning Official Preparation Guides - IELTS, OET, and German"
-            className="w-full h-auto block object-cover rounded-[32px] sm:rounded-[38px] transition-transform duration-500 group-hover:scale-[1.015]"
+            className="w-full h-auto block object-cover rounded-[28px] sm:rounded-[38px] transition-transform duration-500 group-hover:scale-[1.015]"
             draggable={false}
           />
 
@@ -84,7 +100,7 @@ export const HeroBookShowcase: React.FC = () => {
           />
 
           {/* Diagonal Animated Sheen Sweep Effect (Periodic Gloss) */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[32px] sm:rounded-[38px]">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[28px] sm:rounded-[38px]">
             <div className="w-[50%] h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-25 -translate-x-[200%] group-hover:animate-shimmer" />
           </div>
 
@@ -108,7 +124,7 @@ export const HeroBookShowcase: React.FC = () => {
             }}
             onMouseEnter={() => setHoveredBook('ielts')}
             onMouseLeave={() => setHoveredBook(null)}
-            className="absolute left-[3%] top-[14%] w-[31%] h-[68%] rounded-2xl z-10 hover:bg-emerald-600/5 transition-all flex flex-col justify-end p-2 sm:p-3"
+            className="absolute left-[3%] top-[14%] w-[31%] h-[68%] rounded-2xl z-10 hover:bg-emerald-600/5 active:scale-95 transition-all flex flex-col justify-end p-2 sm:p-3"
             title="Click to view IELTS Full Preparation Guide"
           >
             {hoveredBook === 'ielts' && (
@@ -127,7 +143,7 @@ export const HeroBookShowcase: React.FC = () => {
             }}
             onMouseEnter={() => setHoveredBook('oet')}
             onMouseLeave={() => setHoveredBook(null)}
-            className="absolute left-[34%] top-[13%] w-[34%] h-[70%] rounded-2xl z-10 hover:bg-emerald-600/5 transition-all flex flex-col justify-end p-2 sm:p-3"
+            className="absolute left-[34%] top-[13%] w-[34%] h-[70%] rounded-2xl z-10 hover:bg-emerald-600/5 active:scale-95 transition-all flex flex-col justify-end p-2 sm:p-3"
             title="Click to view OET Full Preparation Guide (500+ Mocks)"
           >
             {hoveredBook === 'oet' && (
@@ -146,7 +162,7 @@ export const HeroBookShowcase: React.FC = () => {
             }}
             onMouseEnter={() => setHoveredBook('german')}
             onMouseLeave={() => setHoveredBook(null)}
-            className="absolute right-[3%] top-[14%] w-[31%] h-[68%] rounded-2xl z-10 hover:bg-emerald-600/5 transition-all flex flex-col justify-end p-2 sm:p-3"
+            className="absolute right-[3%] top-[14%] w-[31%] h-[68%] rounded-2xl z-10 hover:bg-emerald-600/5 active:scale-95 transition-all flex flex-col justify-end p-2 sm:p-3"
             title="Click to view German A1-B2 Preparation Guide"
           >
             {hoveredBook === 'german' && (
@@ -166,7 +182,7 @@ export const HeroBookShowcase: React.FC = () => {
               e.stopPropagation();
               openPdfViewer(ieltsBook);
             }}
-            className="absolute left-[5%] bottom-[4%] w-[32%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 transition-colors"
+            className="absolute left-[5%] bottom-[4%] w-[32%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 active:bg-emerald-600/20 transition-colors"
             title="Preview instant downloadable sample PDF"
           />
 
@@ -176,7 +192,7 @@ export const HeroBookShowcase: React.FC = () => {
               e.stopPropagation();
               navigateToProduct(oetBook.id);
             }}
-            className="absolute left-[38%] bottom-[4%] w-[30%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 transition-colors"
+            className="absolute left-[38%] bottom-[4%] w-[30%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 active:bg-emerald-600/20 transition-colors"
             title="Learn about doorstep delivery for physical printed books"
           />
 
@@ -186,7 +202,7 @@ export const HeroBookShowcase: React.FC = () => {
               e.stopPropagation();
               navigateToCatalog('All');
             }}
-            className="absolute right-[5%] bottom-[4%] w-[25%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 transition-colors flex items-center justify-end pr-1"
+            className="absolute right-[5%] bottom-[4%] w-[25%] h-[12%] rounded-xl z-20 cursor-pointer hover:bg-emerald-600/10 active:bg-emerald-600/20 transition-colors flex items-center justify-end pr-1"
             title="View all preparation guides and syllabus books"
           />
         </div>

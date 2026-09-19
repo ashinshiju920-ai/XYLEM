@@ -77,36 +77,41 @@ export const HomeView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-16 sm:space-y-24">
+    <div className="space-y-12 sm:space-y-24">
       {/* 1. HERO SECTION (Image 5 & Image 3) */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#f8fafc] via-white to-slate-50 pt-10 pb-16 lg:pt-14 lg:pb-24 border-b border-slate-100">
+      <section className="relative overflow-hidden bg-gradient-to-b from-[#f8fafc] via-white to-slate-50 pt-8 pb-12 sm:pt-14 sm:pb-24 border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
             {/* Left Hero Text */}
-            <div className="lg:col-span-6 space-y-6 text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold uppercase tracking-wider font-['DM_Sans',sans-serif]">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Welcome to Xylem Learning</span>
+            <div className="lg:col-span-6 space-y-5 sm:space-y-6 text-left">
+              {/* Live Status Pill */}
+              <div className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] sm:text-xs font-semibold font-['DM_Sans',sans-serif] shadow-xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
+                </span>
+                <span>2,840+ Active Learners Today</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#0a2540] tracking-tight leading-[1.12] font-['Plus_Jakarta_Sans',sans-serif]">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[#0a2540] tracking-tight leading-[1.12] font-['Plus_Jakarta_Sans',sans-serif]">
                 Prepare Smarter.{' '}
                 <span className="text-[#00875a] block">Achieve Your Next Goal.</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-slate-600 max-w-xl leading-relaxed font-['DM_Sans',sans-serif] font-normal">
+              <p className="text-sm sm:text-lg text-slate-600 max-w-xl leading-relaxed font-['DM_Sans',sans-serif] font-normal">
                 Complete preparation materials for IELTS, OET, PTE & German — designed for focused self-study and practice.
               </p>
 
               {/* CTAs */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
                 <button
                   id="hero-explore-btn"
                   onClick={() => navigateToCatalog('All')}
-                  className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl text-sm sm:text-base font-semibold bg-[#00875a] text-white hover:bg-[#00734c] shadow-md shadow-emerald-700/20 active:scale-95 transition-all gap-2 font-['DM_Sans',sans-serif]"
+                  className="relative overflow-hidden inline-flex items-center justify-center px-7 py-3.5 rounded-xl text-sm sm:text-base font-semibold bg-[#00875a] text-white hover:bg-[#00734c] shadow-md shadow-emerald-700/25 active:scale-95 transition-all gap-2 font-['DM_Sans',sans-serif] group"
                 >
+                  <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-25 -translate-x-[200%] group-hover:animate-shimmer pointer-events-none" />
                   <span>Explore Study Materials</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
 
                 <button
@@ -119,39 +124,39 @@ export const HomeView: React.FC = () => {
               </div>
 
               {/* 4 Feature Highlights Grid */}
-              <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-200/80">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-5 border-t border-slate-200/80">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
                     <BookOpen className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-semibold text-slate-800">Expert-curated materials</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-800">Expert-curated</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
                     <Award className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-semibold text-slate-800">Exam-focused content</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-800">Exam-focused</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
                     <Layers className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-semibold text-slate-800">Digital + physical resources</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-800">Digital + physical</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center shrink-0">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-semibold text-slate-800">Secure checkout & fast delivery</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-800">Instant PDF license</span>
                 </div>
               </div>
             </div>
 
-            {/* Right Hero Visual (New 3D Animated Showcase from User Reference) */}
-            <div className="lg:col-span-6 relative flex items-center justify-center">
+            {/* Right Hero Visual (3D Animated Showcase with Hotspots) */}
+            <div className="lg:col-span-6 relative flex items-center justify-center pt-2 lg:pt-0">
               <HeroBookShowcase />
             </div>
           </div>
@@ -160,30 +165,31 @@ export const HomeView: React.FC = () => {
 
       {/* 2. CHOOSE YOUR EXAM - SELECT YOUR PATH (Image 5) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 sm:mb-8 gap-3">
           <div>
             <span className="text-xs font-semibold tracking-widest uppercase text-emerald-700 block mb-1 font-['DM_Sans',sans-serif]">
               CHOOSE YOUR EXAM
             </span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
+            <h2 className="text-xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
               Select Your Path
             </h2>
           </div>
           <button
             onClick={() => navigateToCatalog('All')}
-            className="inline-flex items-center text-sm font-semibold text-emerald-700 hover:text-emerald-800 gap-1.5 transition-colors group self-start sm:self-auto font-['DM_Sans',sans-serif]"
+            className="inline-flex items-center text-xs sm:text-sm font-semibold text-emerald-700 hover:text-emerald-800 gap-1.5 transition-colors group self-start sm:self-auto font-['DM_Sans',sans-serif]"
           >
             <span>View All Exams</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* 2 columns on mobile, 4 columns on desktop for perfect thumb browsing */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-6">
           {examPaths.map((path) => (
             <div
               key={path.category}
               onClick={() => navigateToCatalog(path.category)}
-              className="group relative h-64 rounded-2xl overflow-hidden shadow-md cursor-pointer border border-slate-200 transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5"
+              className="group relative h-48 sm:h-64 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-xl cursor-pointer border border-slate-200 transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.98] touch-card"
             >
               {/* Background Image with Overlay */}
               <img
@@ -192,24 +198,24 @@ export const HomeView: React.FC = () => {
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0a2540] via-[#0a2540]/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0a2540] via-[#0a2540]/65 to-transparent" />
 
               {/* Content overlay */}
-              <div className="absolute inset-0 p-5 flex flex-col justify-between text-white">
+              <div className="absolute inset-0 p-3 sm:p-5 flex flex-col justify-between text-white">
                 <div className="flex justify-between items-start">
-                  <span className="text-2xl bg-white/20 backdrop-blur-md w-10 h-10 rounded-full flex items-center justify-center">
+                  <span className="text-xl sm:text-2xl bg-white/20 backdrop-blur-md w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
                     {path.flag}
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowRight className="w-4 h-4 text-white" />
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] mb-1 text-white group-hover:text-emerald-300 transition-colors">
+                  <h3 className="text-lg sm:text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] mb-0.5 sm:mb-1 text-white group-hover:text-emerald-300 transition-colors">
                     {path.title}
                   </h3>
-                  <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed font-['DM_Sans',sans-serif]">
+                  <p className="text-[11px] sm:text-xs text-slate-200 line-clamp-2 leading-relaxed font-['DM_Sans',sans-serif]">
                     {path.description}
                   </p>
                 </div>
@@ -221,52 +227,52 @@ export const HomeView: React.FC = () => {
 
       {/* 3. FEATURED PRODUCTS (Image 5 & Image 3) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 sm:mb-8 gap-3">
           <div>
             <span className="text-xs font-semibold tracking-widest uppercase text-emerald-700 block mb-1 font-['DM_Sans',sans-serif]">
               FEATURED PRODUCTS
             </span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
+            <h2 className="text-xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
               Popular Study Materials & Books
             </h2>
-            <p className="text-sm text-slate-500 mt-1 font-['DM_Sans',sans-serif]">
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 font-['DM_Sans',sans-serif]">
               Complete study guides with practice questions and mock tests. Download instantly or get physical delivery.
             </p>
           </div>
           <button
             onClick={() => navigateToCatalog('All')}
-            className="inline-flex items-center text-sm font-semibold text-emerald-700 hover:text-emerald-800 gap-1.5 transition-colors group self-start sm:self-auto"
+            className="inline-flex items-center text-xs sm:text-sm font-semibold text-emerald-700 hover:text-emerald-800 gap-1.5 transition-colors group self-start sm:self-auto"
           >
             <span>View All Products</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
 
-        {/* 5-Column or Responsive Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* 2-Column on mobile, 5-Column on desktop for sleek catalog cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6">
           {featuredBooks.map((book) => (
             <div
               key={book.id}
-              className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group"
+              className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group touch-card"
             >
               <div
                 onClick={() => navigateToProduct(book.id)}
-                className="cursor-pointer p-4 pb-0 flex flex-col items-center"
+                className="cursor-pointer p-3 sm:p-4 pb-0 flex flex-col items-center"
               >
                 {/* Book cover visual */}
-                <div className="pt-2 pb-4 transition-transform duration-300 group-hover:scale-105">
-                  <BookCover book={book} size="md" />
+                <div className="pt-1 pb-3 transition-transform duration-300 group-hover:scale-105 scale-90 sm:scale-100">
+                  <BookCover book={book} size="sm" />
                 </div>
 
                 {/* Rating & Review */}
-                <div className="w-full flex items-center justify-between mt-2 text-xs">
+                <div className="w-full flex items-center justify-between mt-1 text-[11px] sm:text-xs">
                   <div className="flex items-center text-amber-500 font-semibold">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 mr-1" />
+                    <Star className="w-3 h-3 fill-amber-400 mr-1" />
                     <span>{book.rating}</span>
-                    <span className="text-slate-400 font-normal ml-1">({book.reviewCount})</span>
+                    <span className="text-slate-400 font-normal ml-0.5">({book.reviewCount})</span>
                   </div>
                   {book.isBestSeller && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
                       Best Seller
                     </span>
                   )}
@@ -274,23 +280,23 @@ export const HomeView: React.FC = () => {
 
                 {/* Title */}
                 <div className="w-full mt-2 text-left">
-                  <h3 className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1 font-['Plus_Jakarta_Sans',sans-serif]">
+                  <h3 className="text-xs sm:text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1 font-['Plus_Jakarta_Sans',sans-serif]">
                     {book.title}
                   </h3>
-                  <p className="text-xs text-slate-500 truncate mt-0.5 font-['DM_Sans',sans-serif]">{book.subtitle}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 truncate mt-0.5 font-['DM_Sans',sans-serif]">{book.subtitle}</p>
                 </div>
               </div>
 
               {/* Price & Action */}
-              <div className="p-4 pt-3 border-t border-slate-100 mt-3">
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+              <div className="p-3 sm:p-4 pt-2 border-t border-slate-100 mt-2">
+                <div className="flex items-baseline gap-1.5 mb-2.5">
+                  <span className="text-base sm:text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
                     ₹{book.prices.digital.price}
                   </span>
-                  <span className="text-xs text-slate-400 line-through font-['DM_Sans',sans-serif]">
+                  <span className="text-[10px] sm:text-xs text-slate-400 line-through font-['DM_Sans',sans-serif]">
                     ₹{book.prices.digital.originalPrice}
                   </span>
-                  <span className="text-[11px] font-semibold text-emerald-600 ml-auto font-['DM_Sans',sans-serif]">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-emerald-600 ml-auto font-['DM_Sans',sans-serif]">
                     {book.prices.digital.discountPercent}% OFF
                   </span>
                 </div>
@@ -298,9 +304,9 @@ export const HomeView: React.FC = () => {
                 <button
                   id={`buy-now-${book.id}`}
                   onClick={() => buyNow(book, 'digital')}
-                  className="w-full py-2.5 px-3 rounded-xl bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-95 font-['DM_Sans',sans-serif]"
+                  className="w-full py-2 sm:py-2.5 px-2.5 rounded-xl bg-[#00875a] hover:bg-[#00734c] text-white text-[11px] sm:text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1 active:scale-95 font-['DM_Sans',sans-serif]"
                 >
-                  <span>Buy Now</span>
+                  <span>Buy Now • ₹{book.prices.digital.price}</span>
                 </button>
               </div>
             </div>
@@ -310,51 +316,51 @@ export const HomeView: React.FC = () => {
 
       {/* 4. DIGITAL PRODUCT TRUST BAR (Image 3) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-              <DownloadCloud className="w-5 h-5" />
+        <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-8 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="flex items-start gap-2.5 sm:gap-3.5">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <DownloadCloud className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">100% Digital Product</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
-                Get your study materials instantly after payment. No waiting. Just download and study!
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">100% Digital Product</h4>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
+                Instant download after payment. No waiting!
               </p>
             </div>
           </div>
 
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5" />
+          <div className="flex items-start gap-2.5 sm:gap-3.5">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">PDF Format (Downloadable)</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
-                Standard PDF compatible with phones, tablets, laptops, and printable on paper.
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">Downloadable PDF</h4>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
+                Printable and works on all phones and tablets.
               </p>
             </div>
           </div>
 
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-              <Award className="w-5 h-5" />
+          <div className="flex items-start gap-2.5 sm:gap-3.5">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+              <Award className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">Lifetime Access</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
-                Download anytime from your email or account. Free updates when test patterns change.
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">Lifetime Access</h4>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
+                Free future updates whenever syllabus changes.
               </p>
             </div>
           </div>
 
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
+          <div className="flex items-start gap-2.5 sm:gap-3.5">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">Secure Checkout</h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
-                SSL 256-bit encrypted transactions through UPI, Cards, Netbanking & Razorpay.
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">Secure Checkout</h4>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 leading-relaxed font-['DM_Sans',sans-serif]">
+                SSL 256-bit encrypted transactions via UPI & Cards.
               </p>
             </div>
           </div>

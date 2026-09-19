@@ -11,6 +11,8 @@ import { CartDrawer } from './components/CartDrawer';
 import { SearchModal } from './components/SearchModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { ContactModal } from './components/ContactModal';
+import { SocialProofToast } from './components/SocialProofToast';
+import { MobileBottomBar } from './components/MobileBottomBar';
 
 // Views
 import { HomeView } from './views/HomeView';
@@ -39,7 +41,7 @@ const ShopApp: React.FC = () => {
       {isStorefront && <Header />}
 
       {/* Main View Router */}
-      <main className="flex-1">
+      <main className={`flex-1 ${isStorefront ? 'pb-20 sm:pb-0' : ''}`}>
         {currentView === 'home' && <HomeView />}
         {currentView === 'catalog' && <CatalogView />}
         {currentView === 'product' && <ProductDetailView />}
@@ -55,7 +57,7 @@ const ShopApp: React.FC = () => {
       {isStorefront && <Footer />}
 
       {/* Floating Admin Portal / Storefront Switcher */}
-      <div className="fixed bottom-5 left-5 z-40">
+      <div className="fixed bottom-20 sm:bottom-5 left-3 sm:left-5 z-40">
         {currentView === 'admin' ? (
           <button
             onClick={() => setCurrentView('home')}
@@ -76,6 +78,12 @@ const ShopApp: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Real-time Social Proof Toast ticker */}
+      <SocialProofToast />
+
+      {/* Thumb-friendly Sticky Bottom Bar for Mobile */}
+      <MobileBottomBar />
 
       {/* Global Modals & Drawers */}
       <CartDrawer />
