@@ -134,7 +134,7 @@ export const CheckoutView: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] overflow-x-hidden pb-28 sm:pb-16">
+    <div className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] overflow-x-hidden pb-16">
       {/* Decorative Botanical Leaf Accents */}
       <div className="absolute top-0 right-0 pointer-events-none z-10 w-44 sm:w-64 opacity-80 select-none">
         <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
@@ -1311,36 +1311,6 @@ export const CheckoutView: React.FC = () => {
           </div>
         </div>
       </footer>
-
-      {/* Mobile Sticky Payment Bar (Instant 1-Tap Mobile Conversion) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-4 py-3 shadow-[0_-8px_25px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 animate-in slide-in-from-bottom-3 duration-200">
-        <div>
-          <div className="text-[10px] text-slate-500 font-medium leading-none mb-1">Total Payable</div>
-          <div className="text-lg font-extrabold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
-            ₹{total}
-          </div>
-        </div>
-
-        <button
-          id="mobile-sticky-pay-btn"
-          disabled={isProcessing}
-          onClick={handlePayNow}
-          className="flex-1 py-3 px-5 rounded-full bg-gradient-to-r from-[#00875a] via-[#009b67] to-[#00744e] text-white text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] shadow-md shadow-emerald-700/25 active:scale-95 transition-all flex items-center justify-center gap-2"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Verifying...</span>
-            </>
-          ) : (
-            <>
-              <Lock className="w-3.5 h-3.5" />
-              <span>Pay ₹{total} via {paymentMethod.toUpperCase()}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </>
-          )}
-        </button>
-      </div>
 
       {/* PAYMENT PROCESSING OVERLAY MODAL */}
       {isProcessing && (
