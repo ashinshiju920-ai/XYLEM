@@ -29,14 +29,8 @@ export const HomeView: React.FC = () => {
     openPdfViewer,
   } = useShop();
 
-  // Featured books
-  const featuredBooks = [
-    books.find((b) => b.id === 'ielts-full-prep') || books[0],
-    books.find((b) => b.id === 'oet-full-prep') || books[1] || books[0],
-    books.find((b) => b.id === 'pte-full-prep') || books[2] || books[0],
-    books.find((b) => b.id === 'german-full-prep') || books[3] || books[0],
-    books.find((b) => b.id === 'academic-study-planner') || books[4] || books[0],
-  ].filter(Boolean) as Book[];
+  // Featured books dynamically respect the admin's custom arrangement
+  const featuredBooks = (books && books.length > 0 ? books.slice(0, 5) : []).filter(Boolean);
 
   // 4 Primary Exam Paths matching new reference design
   const examPaths: {

@@ -213,6 +213,16 @@
     </div>
 
     <div class="form-group">
+      <label for="slotSelect">Image Slot (Up to 4 Images per Product)</label>
+      <select id="slotSelect">
+        <option value="0">Slot 1 - Main Cover Image (Storefront Showcase)</option>
+        <option value="1">Slot 2 - Detail Slide 2 / TOC Sample</option>
+        <option value="2">Slot 3 - Detail Slide 3 / Mock Test Sample</option>
+        <option value="3">Slot 4 - Detail Slide 4 / Back Cover Sample</option>
+      </select>
+    </div>
+
+    <div class="form-group">
       <label for="imageFile">Select Product Image</label>
       <input type="file" id="imageFile" accept="image/*" onchange="previewSelectedFile(this)" />
     </div>
@@ -300,6 +310,7 @@
     async function handleImageUpdate() {
       const productIdInput = document.getElementById('productId');
       const productId = productIdInput.value.trim() || 'unassigned';
+      const slotIndex = parseInt(document.getElementById('slotSelect')?.value || '0', 10);
       const fileInput = document.getElementById('imageFile');
       const uploadBtn = document.getElementById('uploadBtn');
       const status = document.getElementById('status');
@@ -316,11 +327,12 @@
       uploadBtn.disabled = true;
       uploadBtn.innerHTML = '<span>⏳ Uploading to Cloudinary CDN & invalidating cache...</span>';
       status.className = 'status-msg status-loading';
-      status.textContent = 'Uploading to Cloudinary & broadcasting to all visitors...';
+      status.textContent = `Uploading Slot ${slotIndex + 1} image & broadcasting to all visitors...`;
 
       const formData = new FormData();
       formData.append('image', fileInput.files[0]);
       formData.append('productId', productId);
+      formData.append('slotIndex', slotIndex.toString());
 
       try {
         let imageUrl = '';
@@ -346,7 +358,7 @@
           console.warn('Edge upload failed, using direct Web Crypto Cloudinary upload:', edgeErr);
           const timestamp = Math.round(Date.now() / 1000);
           const folder = 'ecommerce_products';
-          const publicId = `product_${productId}_${timestamp}`;
+          const publicId = `product_${productId}_slot${slotIndex + 1}_${timestamp}`;
 
           const paramsToSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
           const encoder = new TextEncoder();
@@ -385,6 +397,7 @@
               action: 'update-product-image',
               productId: productId,
               imageUrl: imageUrl,
+              slotIndex: slotIndex,
             }),
           });
 
@@ -419,9 +432,17 @@
 
             const idx = catalog.books.findIndex(b => b.id === productId);
             if (idx !== -1) {
-              catalog.books[idx].imageUrl = imageUrl;
+              const targetBook = catalog.books[idx];
+              const currentImgs = Array.isArray(targetBook.images) && targetBook.images.length > 0
+                ? [...targetBook.images]
+                : (targetBook.imageUrl ? [targetBook.imageUrl] : []);
+              currentImgs[slotIndex] = imageUrl;
+              targetBook.images = currentImgs.filter(Boolean).slice(0, 4);
+              if (slotIndex === 0 || !targetBook.imageUrl) {
+                targetBook.imageUrl = imageUrl;
+              }
             } else {
-              catalog.books.push({ id: productId, title: productId, imageUrl });
+              catalog.books.push({ id: productId, title: productId, imageUrl, images: [imageUrl] });
             }
 
             const timestamp = Math.round(Date.now() / 1000);

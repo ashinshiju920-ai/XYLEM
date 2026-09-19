@@ -113,7 +113,20 @@ export async function onRequestPost(context) {
       const idx = existingBooks.findIndex(b => b.id === prodId || (b.title && b.title.toLowerCase().includes(prodId.toLowerCase())));
 
       if (idx !== -1) {
-        existingBooks[idx] = { ...existingBooks[idx], imageUrl: payload.imageUrl };
+        const targetBook = existingBooks[idx];
+        const slot = payload.slotIndex !== undefined ? Number(payload.slotIndex) : 0;
+        const currentImages = Array.isArray(targetBook.images) && targetBook.images.length > 0 
+          ? [...targetBook.images] 
+          : (targetBook.imageUrl ? [targetBook.imageUrl] : []);
+        
+        currentImages[slot] = payload.imageUrl;
+        const nextImages = currentImages.filter(Boolean).slice(0, 4);
+
+        existingBooks[idx] = { 
+          ...targetBook, 
+          images: nextImages,
+          imageUrl: slot === 0 || !targetBook.imageUrl ? payload.imageUrl : targetBook.imageUrl,
+        };
       } else {
         existingBooks.push({
           id: prodId,
@@ -122,6 +135,7 @@ export async function onRequestPost(context) {
           category: 'IELTS',
           type: 'Study Guides',
           imageUrl: payload.imageUrl,
+          images: [payload.imageUrl],
           prices: { digital: { price: 199, originalPrice: 599, discountPercent: 67 }, physical: { price: 899, originalPrice: 1499, discountPercent: 40 } },
           features: ['Official Exam Syllabus 2026', 'Practice Questions & Solutions'],
           whatYouGet: ['Full Study Material', 'Lifetime Digital Access'],

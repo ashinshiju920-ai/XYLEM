@@ -29,6 +29,10 @@ import {
   Loader2,
   Wifi,
   Radio,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review } from '../types';
@@ -42,6 +46,9 @@ export const AdminView: React.FC = () => {
     updateBook,
     deleteBook,
     resetBooksToDefault,
+    reorderBooks,
+    moveBookOrder,
+    setBookOrderPosition,
     testimonials,
     addTestimonial,
     deleteTestimonial,
@@ -57,7 +64,7 @@ export const AdminView: React.FC = () => {
     syncBooksToCloud,
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'pdfs' | 'reviews' | 'orders'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'arrange' | 'pdfs' | 'reviews' | 'orders'>('overview');
 
   // Products filter
   const [productCategoryFilter, setProductCategoryFilter] = useState<ExamCategory | 'All'>('All');
@@ -100,6 +107,7 @@ export const AdminView: React.FC = () => {
     samplePdfName: 'Xylem_Official_Guide_Sample.pdf',
     pdfUrl: '',
     imageUrl: '',
+    images: [],
     adLink: '',
     adText: 'Buy on Amazon / Partner Site',
     totalPages: 240,
@@ -111,6 +119,7 @@ export const AdminView: React.FC = () => {
   const [whatYouGetInput, setWhatYouGetInput] = useState('');
   const [productSkuInput, setProductSkuInput] = useState<string>('PROD-1029');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [activeSlotUploading, setActiveSlotUploading] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<{
     type: 'idle' | 'uploading' | 'success' | 'error';
     message: string;
@@ -119,6 +128,8 @@ export const AdminView: React.FC = () => {
     message: '',
   });
   const bookImageInputRef = useRef<HTMLInputElement>(null);
+  const slotFileInputRef = useRef<HTMLInputElement>(null);
+  const [targetSlotToUpload, setTargetSlotToUpload] = useState<number>(0);
 
   // PDF Manager State
   const [selectedBookForPdf, setSelectedBookForPdf] = useState<string>(books[0]?.id || '');
@@ -170,6 +181,12 @@ export const AdminView: React.FC = () => {
   // Handle Opening Product Edit
   const handleOpenEditBook = (book: Book) => {
     setEditingBookId(book.id);
+    const existingImages = book.images && Array.isArray(book.images) && book.images.length > 0
+      ? [...book.images]
+      : book.imageUrl
+        ? [book.imageUrl]
+        : [];
+
     setBookFormData({
       title: book.title,
       subtitle: book.subtitle,
@@ -191,11 +208,13 @@ export const AdminView: React.FC = () => {
       coverTheme: { ...book.coverTheme },
       samplePdfName: book.samplePdfName || 'sample.pdf',
       pdfUrl: book.pdfUrl || '',
-      imageUrl: book.imageUrl || '',
+      imageUrl: book.imageUrl || existingImages[0] || '',
+      images: existingImages,
       adLink: book.adLink || '',
       adText: book.adText || '',
       totalPages: book.totalPages || 200,
       reviews: book.reviews ? [...book.reviews] : [],
+      order: book.order,
     });
     setProductSkuInput(book.id || 'PROD-1029');
     setUploadStatus({ type: 'idle', message: '' });
@@ -207,32 +226,46 @@ export const AdminView: React.FC = () => {
     setEditingBookId(null);
     setProductSkuInput(`PROD-${Math.floor(1000 + Math.random() * 9000)}`);
     setUploadStatus({ type: 'idle', message: '' });
-    setBookFormData(initialBookForm);
+    setBookFormData({
+      ...initialBookForm,
+      images: [],
+    });
     setIsProductModalOpen(true);
   };
 
-  // Handle Uploading Product Image via Cloudflare Edge / Cloudinary & Real-Time Sync
-  const handleUploadProductImage = async (file: File) => {
-    if (!file) {
-      setUploadStatus({ type: 'error', message: 'Please choose an image file first.' });
-      return;
-    }
+  // Handle Uploading Product Image (Slot 0-3) via Cloudflare Edge / Cloudinary & Real-Time Sync
+  const handleUploadSlotImage = async (file: File, slotIndex: number) => {
+    if (!file) return;
 
+    setActiveSlotUploading(slotIndex);
     setIsUploadingImage(true);
-    setUploadStatus({ type: 'uploading', message: 'Uploading to Cloudinary CDN & syncing...' });
+    setUploadStatus({ type: 'uploading', message: `Uploading Image (Slot ${slotIndex + 1}) to Cloudinary...` });
 
     const sku = productSkuInput.trim() || editingBookId || `PROD-${Date.now()}`;
 
     try {
-      const uploadedUrl = await uploadImageToCloudinary(file, sku);
-      setBookFormData((prev) => ({ ...prev, imageUrl: uploadedUrl }));
-      setUploadStatus({ type: 'success', message: 'Image uploaded to Cloudinary!' });
-      showToast('Product image uploaded to Cloudinary!', 'success');
+      const uploadedUrl = await uploadImageToCloudinary(file, `${sku}_slot${slotIndex + 1}`);
+      const currentImages = [...(bookFormData.images || [])];
+      currentImages[slotIndex] = uploadedUrl;
+      const nextImages = currentImages.filter(Boolean).slice(0, 4);
+      const nextCover = slotIndex === 0 || !bookFormData.imageUrl ? uploadedUrl : bookFormData.imageUrl;
+
+      setBookFormData((prev) => ({
+        ...prev,
+        images: nextImages,
+        imageUrl: nextCover,
+      }));
+
+      setUploadStatus({ type: 'success', message: `Slot ${slotIndex + 1} image uploaded to Cloudinary!` });
+      showToast(`Image ${slotIndex + 1} uploaded & saved!`, 'success');
 
       // If currently editing an existing product, immediately sync image change live to all users!
       if (editingBookId) {
-        updateBook(editingBookId, { imageUrl: uploadedUrl });
-        showToast('Image change synced live in real-time to all website visitors!', 'success');
+        updateBook(editingBookId, {
+          images: nextImages,
+          imageUrl: nextCover,
+        });
+        showToast('Product images synced in real time to all users!', 'success');
       }
     } catch (err: any) {
       console.error('Image upload failed:', err);
@@ -240,7 +273,70 @@ export const AdminView: React.FC = () => {
       showToast(`Upload failed: ${err.message}`, 'warning');
     } finally {
       setIsUploadingImage(false);
-      if (bookImageInputRef.current) bookImageInputRef.current.value = '';
+      setActiveSlotUploading(null);
+    }
+  };
+
+  const handleRemoveSlotImage = (slotIndex: number) => {
+    const currentImages = [...(bookFormData.images || [])];
+    currentImages.splice(slotIndex, 1);
+    const nextCover = currentImages[0] || '';
+    setBookFormData((prev) => ({
+      ...prev,
+      images: currentImages,
+      imageUrl: nextCover,
+    }));
+    if (editingBookId) {
+      updateBook(editingBookId, {
+        images: currentImages,
+        imageUrl: nextCover,
+      });
+      showToast('Image removed and synced live!', 'info');
+    }
+  };
+
+  const handleSetSlotAsCover = (slotIndex: number) => {
+    const currentImages = [...(bookFormData.images || [])];
+    if (slotIndex <= 0 || slotIndex >= currentImages.length) return;
+    const [selected] = currentImages.splice(slotIndex, 1);
+    currentImages.unshift(selected);
+    setBookFormData((prev) => ({
+      ...prev,
+      images: currentImages,
+      imageUrl: selected,
+    }));
+    if (editingBookId) {
+      updateBook(editingBookId, {
+        images: currentImages,
+        imageUrl: selected,
+      });
+      showToast('Cover image updated & synced live!', 'success');
+    }
+  };
+
+  const handleUploadProductImage = async (file: File) => {
+    await handleUploadSlotImage(file, 0);
+  };
+
+  const handleSetSlotImageUrl = (slotIndex: number, url: string) => {
+    const trimmed = url.trim();
+    const currentImages = [...(bookFormData.images || [])];
+    currentImages[slotIndex] = trimmed;
+    const nextImages = currentImages.filter(Boolean).slice(0, 4);
+    const nextCover = slotIndex === 0 || !bookFormData.imageUrl ? trimmed : bookFormData.imageUrl;
+
+    setBookFormData((prev) => ({
+      ...prev,
+      images: nextImages,
+      imageUrl: nextCover,
+    }));
+
+    if (editingBookId) {
+      updateBook(editingBookId, {
+        images: nextImages,
+        imageUrl: nextCover,
+      });
+      showToast(`Slot ${slotIndex + 1} image updated & synced live!`, 'success');
     }
   };
 
@@ -252,12 +348,23 @@ export const AdminView: React.FC = () => {
       return;
     }
 
+    const finalImages = (bookFormData.images && bookFormData.images.length > 0)
+      ? bookFormData.images.filter(Boolean).slice(0, 4)
+      : (bookFormData.imageUrl ? [bookFormData.imageUrl] : []);
+    const finalCover = finalImages[0] || bookFormData.imageUrl || '';
+
+    const payload = {
+      ...bookFormData,
+      images: finalImages,
+      imageUrl: finalCover,
+    };
+
     if (editingBookId) {
-      updateBook(editingBookId, bookFormData);
+      updateBook(editingBookId, payload);
       showToast(`Updated "${bookFormData.title}" successfully!`, 'success');
     } else {
       const newBook: Book = {
-        ...bookFormData,
+        ...payload,
         id: `book-${Date.now()}`,
       };
       addBook(newBook);
@@ -435,6 +542,7 @@ export const AdminView: React.FC = () => {
             {[
               { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
               { id: 'products', label: `Products & Books (${books.length})`, icon: BookOpen },
+              { id: 'arrange', label: 'Arrange Homepage Order', icon: ArrowUpDown },
               { id: 'pdfs', label: `PDF Manager (${totalPdfs})`, icon: FileText },
               { id: 'reviews', label: `Reviews & Testimonials (${totalReviewsCount})`, icon: Star },
               { id: 'orders', label: `Orders (${orders.length})`, icon: ShoppingBag },
@@ -886,6 +994,225 @@ export const AdminView: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB: ARRANGE HOMEPAGE ORDER
+            ========================================================================= */}
+        {activeTab === 'arrange' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Real-time Cloud Sync Banner */}
+            <div className="bg-gradient-to-r from-[#0a2540] via-slate-900 to-emerald-950 text-white p-6 rounded-3xl border border-emerald-500/30 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                    <ArrowUpDown className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-lg font-black text-white font-['Plus_Jakarta_Sans',sans-serif]">
+                    Arrange Storefront Homepage Products
+                  </h3>
+                  <span className="text-[10px] uppercase font-black bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
+                    Live Ordering
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-1.5 max-w-2xl">
+                  Reorder and customize the exact sequence of products displayed on the main storefront homepage. 
+                  The <strong className="text-emerald-300">Top 5 products</strong> will be prominently showcased in the &ldquo;Most Popular &amp; Best-selling Courses&rdquo; section on the homepage.
+                  Any order change syncs live to all active devices in real-time.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    syncBooksToCloud(books);
+                    showToast('Catalog order synced with cloud in real-time!', 'success');
+                  }}
+                  disabled={isCloudSyncing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isCloudSyncing ? 'Syncing...' : 'Sync Order to Cloud'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('home')}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00875a] hover:bg-[#00734c] text-white shadow-sm transition-all flex items-center gap-2 active:scale-95"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>View Live Homepage</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Product Sequence Reordering List */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Active Catalog Display Sequence ({books.length} Products)
+                  </h4>
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Use ▲ / ▼ buttons or select target position to reorder
+                </span>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {books.map((book, index) => {
+                  const isTopFive = index < 5;
+                  const isFirst = index === 0;
+                  const isLast = index === books.length - 1;
+
+                  return (
+                    <div
+                      key={book.id}
+                      className={`p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+                        isTopFive ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {/* Left: Position Rank & Book Info */}
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        {/* Position Rank Badge */}
+                        <div className="flex flex-col items-center justify-center shrink-0 w-12 text-center">
+                          <div
+                            className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-xs ${
+                              isTopFive
+                                ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            #{index + 1}
+                          </div>
+                          {isTopFive && (
+                            <span className="text-[8px] font-black uppercase tracking-wider text-emerald-700 mt-1">
+                              Featured
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Book Thumbnail / Cover */}
+                        <div className="w-12 shrink-0">
+                          <BookCover book={book} size="sm" />
+                        </div>
+
+                        {/* Title, Subtitle, Pricing */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                              {book.category}
+                            </span>
+                            <span className="text-[9px] font-medium text-slate-500">
+                              {book.type}
+                            </span>
+                            {book.isBestSeller && (
+                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                Bestseller
+                              </span>
+                            )}
+                          </div>
+                          <h5 className="text-sm font-bold text-slate-900 truncate mt-0.5">
+                            {book.title}
+                          </h5>
+                          <p className="text-xs text-slate-500 truncate mt-0.5">
+                            {book.subtitle}
+                          </p>
+                          <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
+                            <span className="font-bold text-[#0a2540]">₹{book.prices.digital.price}</span>
+                            <span className="text-slate-300">•</span>
+                            <span>{book.images && book.images.length > 0 ? `${book.images.length} Image(s)` : 'Cover Image'}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="font-mono text-[10px] text-slate-400">{book.id}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Interactive Reordering Controls */}
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        {/* Jump to Position Dropdown */}
+                        <div className="flex items-center gap-1.5 mr-2">
+                          <span className="text-[11px] font-bold text-slate-500 hidden md:inline">Position:</span>
+                          <select
+                            value={index + 1}
+                            onChange={(e) => {
+                              const newPos = parseInt(e.target.value, 10);
+                              if (!isNaN(newPos)) {
+                                setBookOrderPosition(book.id, newPos);
+                                showToast(`Moved "${book.title}" to position #${newPos}`, 'success');
+                              }
+                            }}
+                            className="px-2.5 py-1.5 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:border-slate-400 text-slate-800 shadow-xs focus:ring-2 focus:ring-emerald-500"
+                            title="Directly select position number"
+                          >
+                            {books.map((_, i) => (
+                              <option key={i + 1} value={i + 1}>
+                                #{i + 1} {i < 5 ? '★ (Homepage Featured)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Move To Top Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookOrderPosition(book.id, 1);
+                            showToast(`"${book.title}" moved to top position (#1)!`, 'success');
+                          }}
+                          disabled={isFirst}
+                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                          title="Move directly to Top (#1)"
+                        >
+                          <ChevronsUp className="w-4 h-4" />
+                        </button>
+
+                        {/* Move Up Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            moveBookOrder(book.id, 'up');
+                            showToast(`Moved "${book.title}" up`, 'info');
+                          }}
+                          disabled={isFirst}
+                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                          title="Move up 1 position"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+
+                        {/* Move Down Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            moveBookOrder(book.id, 'down');
+                            showToast(`Moved "${book.title}" down`, 'info');
+                          }}
+                          disabled={isLast}
+                          className="p-2 rounded-xl text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                          title="Move down 1 position"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+
+                        {/* Quick Edit Trigger */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditBook(book)}
+                          className="p-2 rounded-xl text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 transition-colors ml-1"
+                          title="Edit product details & images"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -1526,186 +1853,240 @@ export const AdminView: React.FC = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSaveBook} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* SECTION 1: PRODUCT IMAGE & CLOUDINARY LIVE SYNC */}
-              <div className="space-y-3 p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0a2540] to-slate-950 text-white border border-slate-700/60 shadow-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-2.5">
+              {/* SECTION 1: PRODUCT IMAGES (UP TO 4 IMAGES • CLOUDINARY LIVE SYNC) */}
+              <div className="space-y-4 p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0a2540] to-slate-950 text-white border border-slate-700/60 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+                    <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
                       <ImageIcon className="w-4 h-4" />
                     </div>
                     <div>
                       <h4 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white flex items-center gap-2">
-                        <span>1. Product Cover Image</span>
+                        <span>1. Product Images Gallery (Up to 4 Images)</span>
                         <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
                           Cloudinary CDN
                         </span>
                       </h4>
                       <p className="text-[10px] text-slate-300 mt-0.5">
-                        Uploaded image syncs in real-time to all live store visitors.
+                        Slot 1 serves as the primary storefront cover. All 4 uploaded images sync live to visitors in real-time.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full">
                       <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
                       Live Real-Time Sync
                     </span>
                   </div>
                 </div>
 
-                {/* Upload & Preview Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-1">
-                  {/* Left: Interactive Dropzone / Upload Box */}
-                  <div className="sm:col-span-7 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Product SKU / ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. PROD-1029"
-                          value={productSkuInput}
-                          onChange={(e) => setProductSkuInput(e.target.value)}
-                          className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400"
-                        />
-                      </div>
+                {/* SKU Config for Cloudinary Naming */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                      Product SKU / Public ID Prefix:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. PROD-1029"
+                      value={productSkuInput}
+                      onChange={(e) => setProductSkuInput(e.target.value)}
+                      className="px-2.5 py-1 text-xs rounded-lg border border-slate-600 bg-slate-900 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400 w-44"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    Images are saved on Cloudinary under this SKU
+                  </span>
+                </div>
 
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Or Direct Image URL
-                        </label>
-                        <input
-                          type="url"
-                          placeholder="https://res.cloudinary.com/..."
-                          value={bookFormData.imageUrl || ''}
-                          onChange={(e) => setBookFormData({ ...bookFormData, imageUrl: e.target.value })}
-                          className="w-full mt-1 px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400"
-                        />
-                      </div>
-                    </div>
+                {/* Hidden File Input for Targeting Any Slot */}
+                <input
+                  type="file"
+                  ref={slotFileInputRef}
+                  accept="image/*"
+                  disabled={isUploadingImage}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleUploadSlotImage(f, targetSlotToUpload);
+                  }}
+                  className="hidden"
+                />
 
-                    {/* Prominent File Upload Box */}
-                    <div
-                      onClick={() => bookImageInputRef.current?.click()}
-                      className="border-2 border-dashed border-sky-500/40 hover:border-sky-400/80 bg-sky-950/20 hover:bg-sky-950/40 rounded-xl p-4 text-center cursor-pointer transition-all group"
-                    >
-                      <input
-                        type="file"
-                        ref={bookImageInputRef}
-                        accept="image/*"
-                        disabled={isUploadingImage}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handleUploadProductImage(f);
-                        }}
-                        className="hidden"
-                      />
-                      <div className="flex flex-col items-center justify-center gap-1.5">
-                        {isUploadingImage ? (
-                          <>
-                            <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
-                            <p className="text-xs font-bold text-sky-300">Uploading to Cloudinary CDN...</p>
-                            <p className="text-[10px] text-slate-400">Broadcasting live image update</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Upload className="w-4 h-4" />
-                            </div>
-                            <p className="text-xs font-bold text-white">
-                              {bookFormData.imageUrl ? 'Click to Replace Product Image' : 'Click to Upload Product Image'}
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              PNG, JPG, WebP supported • Direct Cloudinary Edge Upload
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                {/* Upload Status Alert */}
+                {uploadStatus.message && (
+                  <div
+                    className={`text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2 ${
+                      uploadStatus.type === 'uploading'
+                        ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50'
+                        : uploadStatus.type === 'success'
+                        ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
+                        : 'bg-rose-900/40 text-rose-300 border border-rose-700/50'
+                    }`}
+                  >
+                    {uploadStatus.type === 'uploading' && <Loader2 className="w-4 h-4 animate-spin text-blue-400 shrink-0" />}
+                    {uploadStatus.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {uploadStatus.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+                    <span>{uploadStatus.message}</span>
+                  </div>
+                )}
 
-                    {/* Upload Status Alert */}
-                    {uploadStatus.message && (
+                {/* 4-Slot Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[0, 1, 2, 3].map((slotIdx) => {
+                    const currentImg =
+                      (bookFormData.images && bookFormData.images[slotIdx]) ||
+                      (slotIdx === 0 ? bookFormData.imageUrl : '');
+                    const isUploadingThisSlot = isUploadingImage && activeSlotUploading === slotIdx;
+                    const slotTitles = [
+                      'Slot 1 (Cover / Main)',
+                      'Slot 2 (TOC / Preview)',
+                      'Slot 3 (Mock Test)',
+                      'Slot 4 (Back / Details)',
+                    ];
+
+                    return (
                       <div
-                        className={`text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-2 ${
-                          uploadStatus.type === 'uploading'
-                            ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50'
-                            : uploadStatus.type === 'success'
-                            ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
-                            : 'bg-rose-900/40 text-rose-300 border border-rose-700/50'
+                        key={slotIdx}
+                        className={`p-3 rounded-2xl border transition-all flex flex-col justify-between ${
+                          currentImg
+                            ? 'bg-slate-950/70 border-slate-700'
+                            : 'bg-slate-900/50 border-dashed border-slate-700/80 hover:border-sky-500/50'
                         }`}
                       >
-                        {uploadStatus.type === 'uploading' && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
-                        {uploadStatus.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                        {uploadStatus.type === 'error' && <AlertCircle className="w-3.5 h-3.5 text-rose-400" />}
-                        <span>{uploadStatus.message}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right: Live Preview Box */}
-                  <div className="sm:col-span-5 bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col items-center justify-center min-h-[170px]">
-                    {bookFormData.imageUrl ? (
-                      <div className="w-full flex flex-col items-center gap-2">
-                        <div className="relative group">
-                          <img
-                            src={bookFormData.imageUrl}
-                            alt="Cloudinary Product Preview"
-                            className="w-24 h-32 object-cover rounded-lg border border-slate-700 shadow-md"
-                          />
-                          <span className="absolute bottom-1 right-1 bg-emerald-500 text-slate-950 text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow">
-                            Live CDN
+                        {/* Slot Header */}
+                        <div className="flex items-center justify-between gap-1 mb-2">
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                              slotIdx === 0
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                            }`}
+                          >
+                            {slotTitles[slotIdx]}
                           </span>
+
+                          {currentImg && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSlotImage(slotIdx)}
+                              className="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                              title="Remove image from this slot"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
 
-                        <p className="text-[10px] font-mono text-slate-400 truncate max-w-full text-center px-2">
-                          {bookFormData.imageUrl}
-                        </p>
+                        {/* Image Preview or Empty State Dropzone */}
+                        <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center min-h-[140px] my-1 group">
+                          {isUploadingThisSlot ? (
+                            <div className="flex flex-col items-center justify-center p-3 text-center">
+                              <Loader2 className="w-6 h-6 animate-spin text-sky-400 mb-1.5" />
+                              <p className="text-[11px] font-bold text-sky-300">Uploading...</p>
+                              <p className="text-[9px] text-slate-400">Syncing live CDN</p>
+                            </div>
+                          ) : currentImg ? (
+                            <div className="relative w-full h-[140px] flex items-center justify-center">
+                              <img
+                                src={currentImg}
+                                alt={`Slot ${slotIdx + 1} Preview`}
+                                className="w-full h-full object-contain bg-slate-950/80"
+                              />
+                              <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetSlotToUpload(slotIdx);
+                                    slotFileInputRef.current?.click();
+                                  }}
+                                  className="w-full py-1 px-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-[10px] font-bold text-white shadow-xs"
+                                >
+                                  Replace Image
+                                </button>
+                                {slotIdx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetSlotAsCover(slotIdx)}
+                                    className="w-full py-1 px-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-[10px] font-bold text-white shadow-xs"
+                                    title="Make this image the main product cover"
+                                  >
+                                    ★ Make Cover
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => {
+                                setTargetSlotToUpload(slotIdx);
+                                slotFileInputRef.current?.click();
+                              }}
+                              className="flex flex-col items-center justify-center p-3 text-center cursor-pointer w-full h-full hover:bg-sky-950/20 transition-colors"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-slate-800 group-hover:bg-sky-500/20 text-slate-400 group-hover:text-sky-400 flex items-center justify-center transition-colors mb-1">
+                                <Upload className="w-4 h-4" />
+                              </div>
+                              <p className="text-[11px] font-bold text-slate-300 group-hover:text-white">
+                                + Upload Image
+                              </p>
+                              <p className="text-[9px] text-slate-500">PNG, JPG, WebP</p>
+                            </div>
+                          )}
+                        </div>
 
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (bookFormData.imageUrl) {
-                                navigator.clipboard.writeText(bookFormData.imageUrl);
-                                showToast('Copied Cloudinary URL to clipboard!', 'info');
-                              }
-                            }}
-                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-semibold flex items-center gap-1 border border-slate-700"
-                          >
-                            <Copy className="w-3 h-3" /> Copy URL
-                          </button>
-                          <a
-                            href={bookFormData.imageUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2 py-1 rounded bg-sky-900/40 hover:bg-sky-800/60 text-[10px] text-sky-300 font-semibold flex items-center gap-1 border border-sky-700/50"
-                          >
-                            <ExternalLink className="w-3 h-3" /> View Full
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBookFormData((prev) => ({ ...prev, imageUrl: '' }));
-                              setUploadStatus({ type: 'idle', message: '' });
-                            }}
-                            className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/60 text-[10px] text-rose-300 font-semibold flex items-center gap-1 border border-rose-800/50"
-                          >
-                            <Trash2 className="w-3 h-3" /> Remove
-                          </button>
+                        {/* Slot Footer Controls (URL Input / Actions) */}
+                        <div className="mt-2 space-y-1.5">
+                          <input
+                            type="url"
+                            placeholder="Paste direct image URL..."
+                            value={currentImg || ''}
+                            onChange={(e) => handleSetSlotImageUrl(slotIdx, e.target.value)}
+                            className="w-full px-2 py-1 text-[10px] rounded-lg border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:ring-1 focus:ring-sky-400 truncate"
+                          />
+
+                          <div className="flex items-center justify-between gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTargetSlotToUpload(slotIdx);
+                                slotFileInputRef.current?.click();
+                              }}
+                              className="flex-1 py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-[9px] font-bold text-slate-300 transition-colors text-center"
+                            >
+                              {currentImg ? 'Change File' : 'Browse File'}
+                            </button>
+
+                            {currentImg && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(currentImg);
+                                  showToast(`Copied Slot ${slotIdx + 1} URL!`, 'info');
+                                }}
+                                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                                title="Copy image URL"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            {currentImg && (
+                              <a
+                                href={currentImg}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-400"
+                                title="Open full-res image"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-center p-3 space-y-2 text-slate-500">
-                        <ImageIcon className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
-                        <p className="text-xs font-semibold text-slate-400">No Image Uploaded Yet</p>
-                        <p className="text-[10px] text-slate-500 max-w-[180px]">
-                          Upload a cover image above or select a gradient theme below.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
 

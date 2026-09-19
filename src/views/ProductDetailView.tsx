@@ -109,48 +109,54 @@ export const ProductDetailView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
         {/* Left Column: Gallery & Book Preview */}
         <div className="lg:col-span-6 flex flex-col sm:flex-row gap-4 items-center sm:items-start justify-center">
-          {/* Thumbnails list on left (as shown in template Image 2) */}
+          {/* Thumbnails list on left */}
           <div className="flex sm:flex-col gap-3 order-2 sm:order-1">
-            {[0, 1, 2, 3].map((idx) => (
-              <button
-                key={idx}
-                onClick={() => setSelectedThumbnail(idx)}
-                className={`w-14 h-18 rounded-lg border-2 p-1 overflow-hidden transition-all ${
-                  selectedThumbnail === idx
-                    ? 'border-emerald-600 ring-2 ring-emerald-100 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300 opacity-80'
-                }`}
-              >
-                {idx === 0 ? (
-                  book.imageUrl || book.coverImage ? (
+            {[0, 1, 2, 3].map((idx) => {
+              const imgUrl = (book.images && book.images[idx]) || (idx === 0 ? (book.imageUrl || book.coverImage) : null);
+              const labels = ['Cover', 'Page 2', 'Sample', 'Back'];
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedThumbnail(idx)}
+                  className={`w-14 h-18 rounded-lg border-2 p-1 overflow-hidden transition-all flex flex-col items-center justify-center relative ${
+                    selectedThumbnail === idx
+                      ? 'border-emerald-600 ring-2 ring-emerald-100 shadow-sm'
+                      : 'border-slate-200 hover:border-slate-300 opacity-80'
+                  }`}
+                  aria-label={`View image ${idx + 1}`}
+                >
+                  {imgUrl ? (
                     <img
-                      src={book.imageUrl || book.coverImage}
-                      alt={book.title}
+                      src={imgUrl}
+                      alt={`${book.title} view ${idx + 1}`}
                       className="w-full h-full object-cover rounded-xs"
                     />
-                  ) : (
+                  ) : idx === 0 ? (
                     <div className="w-full h-full bg-slate-900 rounded-xs flex items-center justify-center text-[7px] text-white font-bold">
                       Cover
                     </div>
-                  )
-                ) : idx === 1 ? (
-                  <div className="w-full h-full bg-slate-100 rounded-xs flex flex-col items-center justify-center p-0.5 text-[6px] text-slate-600">
-                    <div className="w-3/4 h-1 bg-slate-300 mb-0.5"></div>
-                    <div className="w-1/2 h-1 bg-slate-300"></div>
-                    <span>TOC</span>
-                  </div>
-                ) : idx === 2 ? (
-                  <div className="w-full h-full bg-emerald-50 rounded-xs flex flex-col items-center justify-center p-0.5 text-[6px] text-emerald-800 font-bold">
-                    <span>MOCK</span>
-                    <span>TEST</span>
-                  </div>
-                ) : (
-                  <div className="w-full h-full bg-slate-800 rounded-xs flex items-center justify-center text-[6px] text-slate-300">
-                    Back
-                  </div>
-                )}
-              </button>
-            ))}
+                  ) : idx === 1 ? (
+                    <div className="w-full h-full bg-slate-100 rounded-xs flex flex-col items-center justify-center p-0.5 text-[6px] text-slate-600">
+                      <div className="w-3/4 h-1 bg-slate-300 mb-0.5"></div>
+                      <div className="w-1/2 h-1 bg-slate-300"></div>
+                      <span>TOC</span>
+                    </div>
+                  ) : idx === 2 ? (
+                    <div className="w-full h-full bg-emerald-50 rounded-xs flex flex-col items-center justify-center p-0.5 text-[6px] text-emerald-800 font-bold">
+                      <span>MOCK</span>
+                      <span>TEST</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-slate-800 rounded-xs flex items-center justify-center text-[6px] text-slate-300">
+                      Back
+                    </div>
+                  )}
+                  <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[6px] text-white px-1 rounded-xs">
+                    {idx + 1}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Main Book Visual Display */}
@@ -158,22 +164,36 @@ export const ProductDetailView: React.FC = () => {
             {/* Carousel navigation arrows */}
             <button
               onClick={() => setSelectedThumbnail((prev) => (prev > 0 ? prev - 1 : 3))}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-md flex items-center justify-center text-slate-700 hover:bg-white hover:text-emerald-700"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-md flex items-center justify-center text-slate-700 hover:bg-white hover:text-emerald-700 transition-colors z-20"
               aria-label="Previous image"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setSelectedThumbnail((prev) => (prev < 3 ? prev + 1 : 0))}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-md flex items-center justify-center text-slate-700 hover:bg-white hover:text-emerald-700"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-md flex items-center justify-center text-slate-700 hover:bg-white hover:text-emerald-700 transition-colors z-20"
               aria-label="Next image"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
 
             {/* Display according to selected thumbnail */}
-            <div className="py-4">
-              <BookCover book={book} size="lg" />
+            <div className="py-4 w-full flex items-center justify-center min-h-[320px]">
+              {(() => {
+                const activeCustomImg = (book.images && book.images[selectedThumbnail]) || (selectedThumbnail === 0 ? (book.imageUrl || book.coverImage) : null);
+                if (activeCustomImg && selectedThumbnail > 0) {
+                  return (
+                    <div className="w-56 h-76 sm:w-64 sm:h-88 rounded-xl overflow-hidden shadow-xl border border-slate-200 bg-white flex items-center justify-center p-2">
+                      <img
+                        src={activeCustomImg}
+                        alt={`${book.title} slide ${selectedThumbnail + 1}`}
+                        className="w-full h-full object-contain rounded-lg"
+                      />
+                    </div>
+                  );
+                }
+                return <BookCover book={book} size="lg" />;
+              })()}
             </div>
 
             {/* Quick Preview Button */}

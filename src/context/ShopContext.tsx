@@ -32,6 +32,9 @@ interface ShopContextType {
   updateBook: (id: string, updated: Partial<Book>) => void;
   deleteBook: (id: string) => void;
   resetBooksToDefault: () => void;
+  reorderBooks: (orderedBooks: Book[]) => void;
+  moveBookOrder: (bookId: string, direction: 'up' | 'down') => void;
+  setBookOrderPosition: (bookId: string, targetPosition: number) => void;
 
   // Real-time Cloud Synchronization
   isCloudSyncing: boolean;
@@ -533,6 +536,50 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showToast('Catalog restored to default books & synced', 'info');
   };
 
+  const reorderBooks = (orderedBooks: Book[]) => {
+    const withOrder = orderedBooks.map((b, i) => ({ ...b, order: i + 1 }));
+    setBooks(withOrder);
+    triggerCloudSync(withOrder);
+    showToast('Product arrangement updated & synced live across storefront!', 'success');
+  };
+
+  const moveBookOrder = (bookId: string, direction: 'up' | 'down') => {
+    setBooks((prev) => {
+      const idx = prev.findIndex((b) => b.id === bookId);
+      if (idx === -1) return prev;
+      if (direction === 'up' && idx === 0) return prev;
+      if (direction === 'down' && idx === prev.length - 1) return prev;
+
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      const next = [...prev];
+      const [moved] = next.splice(idx, 1);
+      next.splice(targetIdx, 0, moved);
+
+      const withOrder = next.map((b, i) => ({ ...b, order: i + 1 }));
+      triggerCloudSync(withOrder);
+      return withOrder;
+    });
+    showToast('Homepage product position updated & synced!', 'success');
+  };
+
+  const setBookOrderPosition = (bookId: string, targetPosition: number) => {
+    setBooks((prev) => {
+      const idx = prev.findIndex((b) => b.id === bookId);
+      if (idx === -1) return prev;
+      const clamped = Math.max(1, Math.min(prev.length, targetPosition)) - 1;
+      if (clamped === idx) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(idx, 1);
+      next.splice(clamped, 0, moved);
+
+      const withOrder = next.map((b, i) => ({ ...b, order: i + 1 }));
+      triggerCloudSync(withOrder);
+      return withOrder;
+    });
+    showToast(`Product moved to position #${targetPosition} & synced live!`, 'success');
+  };
+
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
     const newTestimonial: Testimonial = {
       ...item,
@@ -670,6 +717,9 @@ startxref
         updateBook,
         deleteBook,
         resetBooksToDefault,
+        reorderBooks,
+        moveBookOrder,
+        setBookOrderPosition,
         testimonials,
         addTestimonial,
         deleteTestimonial,

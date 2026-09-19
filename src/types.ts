@@ -41,6 +41,8 @@ export interface Book {
   pdfUrl?: string;
   imageUrl?: string;
   coverImage?: string;
+  images?: string[];
+  order?: number;
   adLink?: string;
   adText?: string;
   reviews?: Review[];
