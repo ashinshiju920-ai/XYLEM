@@ -1,1499 +1,598 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ShieldCheck,
   Lock,
   ArrowRight,
-  ChevronRight,
-  CreditCard,
-  Building2,
-  Wallet,
-  CheckCircle2,
-  Tag,
-  Loader2,
-  Download,
-  Star,
-  BookOpen,
-  Headphones,
-  CheckSquare,
-  Award,
+  Search,
+  User,
+  ShoppingBag,
   Zap,
-  Clock,
-  ExternalLink,
-  ChevronDown,
-  Sparkles,
-  Instagram,
-  Youtube,
-  Facebook,
-  Linkedin,
-  Users,
+  Headphones,
+  CheckCircle2,
+  Check,
+  Star,
+  Shield,
+  Loader2,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { BookCover } from '../components/BookCover';
-import { PaymentMethod, Book } from '../types';
+import { Book } from '../types';
 import { BOOKS } from '../data/books';
 import { XylemLogo } from '../components/XylemLogo';
-import { loadCashfreeSDK, createCashfreeOrder, GOOGLE_SHEET_COPY_URL, CASHFREE_PAYMENT_FORM_URL } from '../utils/cashfree';
+import { CashfreeLogo } from '../components/CashfreeLogo';
 
 export const CheckoutView: React.FC = () => {
   const {
     cart,
     subtotal,
-    deliveryFee,
     total,
-    discount,
-    appliedCoupon,
-    applyCoupon,
-    removeCoupon,
-    shippingInfo,
-    setShippingInfo,
-    placeOrder,
     setCurrentView,
-    setIsContactModalOpen,
-    showToast,
+    navigateToCatalog,
+    openCart,
+    cartCount,
+    setIsSearchOpen,
   } = useShop();
 
-  // Active book & pricing calculations for preview
-  const primaryItem = cart.length > 0 ? cart[0] : null;
-  const activeBook: Book = primaryItem?.book || (BOOKS.find((b) => b.id === 'ielts-full-prep') || BOOKS[0]);
-  const activeFormat = primaryItem?.format || 'digital';
-  const originalPrice = primaryItem?.originalPrice || (activeFormat === 'digital' ? activeBook.prices.digital.originalPrice : activeBook.prices.physical.originalPrice);
-  const currentPrice = primaryItem?.price || (activeFormat === 'digital' ? activeBook.prices.digital.price : activeBook.prices.physical.price);
-  const totalFreeAddonDiscount = cart.reduce((sum, item) => sum + ((item.freeAddonDiscount || 0) * item.quantity), 0);
-  const totalOriginalPrice = cart.reduce((sum, item) => sum + ((item.originalPrice || item.price) * item.quantity), 0);
-  const savingsAmount = Math.max(0, (totalOriginalPrice > 0 ? totalOriginalPrice : originalPrice) - (subtotal > 0 ? subtotal : currentPrice));
-
-  // Checkout step: 1 = Shipping, 2 = Payment (default from mockup), 3 = Review
-  const [activeStep, setActiveStep] = useState<1 | 2 | 3>(2);
-
-  // Payment method selection
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
-  const [upiTab, setUpiTab] = useState<'apps' | 'id' | 'qr'>('apps');
-  const [upiId, setUpiId] = useState('ashin@okaxis');
-  const [selectedUpiApp, setSelectedUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
-
-  // Card fields
-  const [cardNumber, setCardNumber] = useState('4532 •••• •••• 8829');
-  const [cardExpiry, setCardExpiry] = useState('08/28');
-  const [cardCvv, setCardCvv] = useState('829');
-  const [cardName, setCardName] = useState('Ashin Shiju');
-
-  // Net banking & wallets
-  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
-  const [selectedWallet, setSelectedWallet] = useState('PhonePe');
-
-  // Coupon input
-  const [couponInput, setCouponInput] = useState('');
-
-  // Payment processing state
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState('');
 
-  // Live animated countdown timer: 23 hours, 59 mins, 32 secs (as in image)
-  const [timeLeft, setTimeLeft] = useState({
-    hours: 23,
-    minutes: 59,
-    seconds: 32,
-  });
+  // Active book & pricing calculations
+  const primaryItem = cart.length > 0 ? cart[0] : null;
+  const activeBook: Book =
+    primaryItem?.book || (BOOKS.find((b) => b.id === 'ielts-full-prep') || BOOKS[0]);
+  const activeFormat = primaryItem?.format || 'digital';
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        }
-        return { hours: 23, minutes: 59, seconds: 45 };
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const rawOriginalPrice =
+    primaryItem?.originalPrice ||
+    (activeFormat === 'digital'
+      ? activeBook.prices.digital.originalPrice
+      : activeBook.prices.physical.originalPrice) ||
+    599;
 
-  // Listen for Cashfree redirect callback if redirected
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const orderIdParam = urlParams.get('order_id');
-      const cfStatus = urlParams.get('cf_status');
+  const rawCurrentPrice =
+    primaryItem?.price ||
+    (activeFormat === 'digital'
+      ? activeBook.prices.digital.price
+      : activeBook.prices.physical.price) ||
+    199;
 
-      if (orderIdParam || cfStatus === 'success') {
-        placeOrder('card');
-        showToast('Cashfree payment confirmed! Opening your study materials template...', 'success');
-        try {
-          window.open(GOOGLE_SHEET_COPY_URL, '_blank');
-        } catch (e) {
-          console.warn('Could not auto-open Google Sheet template:', e);
-        }
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }
-  }, []);
+  const totalOriginalPrice = cart.reduce(
+    (sum, item) => sum + ((item.originalPrice || item.price) * item.quantity),
+    0
+  );
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (couponInput.trim()) {
-      applyCoupon(couponInput);
-      setCouponInput('');
-    }
-  };
+  const displayOriginalPrice = totalOriginalPrice > 0 ? totalOriginalPrice : rawOriginalPrice;
+  const displaySubtotal = subtotal > 0 ? subtotal : rawCurrentPrice;
+  const displayTotal = total > 0 ? total : displaySubtotal;
+  const displayDiscount = Math.max(0, displayOriginalPrice - displayTotal) || 400;
+  const discountPercent = Math.min(
+    90,
+    Math.max(10, Math.round((displayDiscount / (displayTotal + displayDiscount)) * 100))
+  ) || 67;
 
-  const handlePayNow = async () => {
+  // Direct Redirect to official Cashfree payment form
+  const handleProceedToPayment = () => {
     setIsProcessing(true);
-    setProcessingStatus('Creating secure Cashfree order session...');
-
-    try {
-      // 1. Create Cashfree order session via Cloudflare Pages endpoint
-      const orderData = await createCashfreeOrder({
-        cart,
-        couponCode: appliedCoupon,
-        shippingInfo,
-        requestedAmount: total,
-        paymentMethod,
-      });
-
-      const sessionId = orderData?.payment_session_id || orderData?.paymentSessionId;
-      if (!orderData || !sessionId) {
-        throw new Error('Failed to generate Cashfree payment session');
-      }
-
-      // 2. Initialize Cashfree SDK v3 with exact mode matching the session
-      const targetMode: 'sandbox' | 'production' = orderData.environment || (orderData.isProd ? 'production' : 'sandbox');
-      setProcessingStatus(`Connecting to Cashfree Gateway (${targetMode})...`);
-
-      const cashfree = await loadCashfreeSDK(targetMode);
-      if (!cashfree) {
-        throw new Error('Cashfree SDK is not available. Please refresh the page.');
-      }
-
-      setProcessingStatus('Redirecting to Cashfree Secure Checkout...');
-
-      // 3. Trigger Cashfree drop-in redirect
-      // Cashfree redirects directly to hosted payment, then to https://portal.xylemlearning.online/ upon completion
-      await cashfree.checkout({
-        paymentSessionId: sessionId,
-        redirectTarget: '_self',
-      });
-    } catch (err: any) {
-      console.warn('Direct Cashfree session failed, opening official Cashfree payment form:', err);
-      setProcessingStatus('Redirecting to Cashfree Secure Payment Form...');
-      showToast('Redirecting to Cashfree Secure Checkout...', 'info');
-      // Seamless guaranteed fallback to official Cashfree form
-      setTimeout(() => {
-        window.location.href = CASHFREE_PAYMENT_FORM_URL;
-      }, 700);
-    }
+    window.location.href = 'https://payments.cashfree.com/forms/study-portal-buy';
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] overflow-x-hidden pb-16">
-      {/* Decorative Botanical Leaf Accents */}
-      <div className="absolute top-0 right-0 pointer-events-none z-10 w-44 sm:w-64 opacity-80 select-none">
-        <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-          <path d="M190 10 C150 40, 140 80, 160 130 C170 90, 190 60, 190 10 Z" fill="#00875a" fillOpacity="0.8" />
-          <path d="M185 30 C130 55, 110 95, 125 150 C140 105, 165 70, 185 30 Z" fill="#00a36c" fillOpacity="0.6" />
-          <path d="M150 20 C110 50, 95 90, 105 130 C120 90, 140 60, 150 20 Z" fill="#34d399" fillOpacity="0.4" />
-          <path d="M195 2 C160 35, 145 90, 165 140" stroke="#00734c" strokeWidth="2.5" strokeLinecap="round" />
-        </svg>
-      </div>
-
-      <div className="absolute bottom-12 right-0 pointer-events-none z-10 w-40 sm:w-56 opacity-85 select-none">
-        <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-          <path d="M190 190 C150 160, 140 120, 160 70 C170 110, 190 140, 190 190 Z" fill="#00875a" fillOpacity="0.8" />
-          <path d="M185 170 C130 145, 110 105, 125 50 C140 95, 165 130, 185 170 Z" fill="#00a36c" fillOpacity="0.6" />
-          <path d="M150 180 C110 150, 95 110, 105 70 C120 110, 140 140, 150 180 Z" fill="#34d399" fillOpacity="0.4" />
-          <path d="M195 198 C160 165, 145 110, 165 60" stroke="#00734c" strokeWidth="2.5" strokeLinecap="round" />
-        </svg>
-      </div>
-
-      {/* Top Focused Checkout Header */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-xs backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          {/* Logo */}
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-['DM_Sans',sans-serif] selection:bg-emerald-100 selection:text-emerald-900 flex flex-col">
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER NAVIGATION (Matching Image 1 Mobile & Image 2 PC)          */}
+      {/* ========================================================================= */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 transition-all">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+          {/* Brand Logo */}
           <div
             onClick={() => setCurrentView('home')}
-            className="cursor-pointer transition-transform hover:scale-[1.01]"
+            className="cursor-pointer transition-transform hover:scale-[1.02] flex items-center gap-2"
           >
-            <XylemLogo size="sm" showTagline={true} />
+            <XylemLogo />
           </div>
 
-          {/* Center Trust Badge */}
-          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 px-3.5 py-1.5 rounded-full border border-slate-200">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Secure Checkout</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-500 font-normal">100% Safe & Encrypted</span>
-          </div>
+          {/* Desktop Navigation Links (Visible on PC) */}
+          <nav className="hidden md:flex items-center gap-7 text-[13px] font-semibold text-slate-700">
+            <button
+              onClick={() => setCurrentView('home')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              Home
+            </button>
+            <button
+              onClick={() => navigateToCatalog('IELTS')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              IELTS
+            </button>
+            <button
+              onClick={() => navigateToCatalog('OET')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              OET
+            </button>
+            <button
+              onClick={() => navigateToCatalog('PTE')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              PTE
+            </button>
+            <button
+              onClick={() => navigateToCatalog('German')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              German
+            </button>
+            <button
+              onClick={() => navigateToCatalog('All')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              Books
+            </button>
+            <button
+              onClick={() => setCurrentView('about')}
+              className="hover:text-emerald-700 transition-colors"
+            >
+              About
+            </button>
+          </nav>
 
-          {/* Right Help Desk */}
-          <button
-            onClick={() => setIsContactModalOpen(true)}
-            className="flex items-center gap-2.5 text-left text-xs hover:text-emerald-700 transition-colors group cursor-pointer"
-          >
-            <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-              <Headphones className="w-4 h-4" />
-            </div>
-            <div className="hidden sm:block">
-              <div className="font-semibold text-slate-900 leading-tight">Need Help?</div>
-              <div className="text-[11px] text-slate-500">Our team is here 24/7</div>
-            </div>
-          </button>
+          {/* Right Action Icons */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+              title="Search materials"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCurrentView('orders')}
+              className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+              title="My Account"
+              aria-label="Account"
+            >
+              <User className="w-5 h-5" />
+            </button>
+            <button
+              onClick={openCart}
+              className="relative w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+              title="Shopping Cart"
+              aria-label="Cart"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              <span className="absolute -top-0.5 -right-0.5 bg-emerald-700 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
+                {cartCount > 0 ? cartCount : 1}
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* 1. TOP TRUST BANNER CARD (Exact Match from Mockup) */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-white border border-emerald-200/90 p-4 sm:p-5 shadow-xs">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Left Headline & Student Count */}
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-600 to-[#00734c] text-white flex items-center justify-center shadow-md shadow-emerald-700/20 shrink-0">
-                <ShieldCheck className="w-7 h-7" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
-                  Thousands of students trust Xylem Learning
-                </h2>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Join 1M+ learners who achieved their dreams with our study materials
-                </p>
-              </div>
-            </div>
-
-            {/* Right 4 Value Pillars */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 pt-3 lg:pt-0 border-t lg:border-t-0 border-emerald-100">
-              <div className="flex items-center gap-2 text-left">
-                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight">
-                  100% Secure Payments
-                </span>
+      {/* ========================================================================= */}
+      {/* 2. HERO BANNER SECTION (You're Almost There! + Student Photo)            */}
+      {/* ========================================================================= */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-[#eaf6f2] via-[#f2faf7] to-[#f8fafc] pt-6 sm:pt-10 pb-8 sm:pb-12 border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            {/* Left Headline & Trust Badges */}
+            <div className="md:col-span-7 lg:col-span-8 space-y-3 sm:space-y-4">
+              {/* Secure Checkout Pill */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200/90 text-emerald-800 text-xs font-bold shadow-xs">
+                <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Secure Checkout</span>
               </div>
 
-              <div className="flex items-center gap-2 text-left">
-                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Zap className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight">
-                  Instant Download (PDF)
-                </span>
-              </div>
+              {/* Main Heading */}
+              <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black text-slate-900 tracking-tight font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
+                You’re Almost There!
+              </h1>
 
-              <div className="flex items-center gap-2 text-left">
-                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Award className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight">
-                  Trusted by Learners Worldwide
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 text-left">
-                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Headphones className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight">
-                  Hassle-Free Support
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. PROGRESS STEPPER (Shipping -> Payment -> Review) */}
-        <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-6 py-2 px-1 text-xs w-full">
-          {/* Step 1: Shipping */}
-          <button
-            onClick={() => setActiveStep(1)}
-            className="flex items-center gap-2 text-left cursor-pointer group transition-opacity shrink-0"
-          >
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-              ✓
-            </div>
-            <div>
-              <div className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors text-[11px] sm:text-xs">
-                Shipping
-              </div>
-              <div className="text-[9px] sm:text-[10px] text-slate-500 font-medium hidden xs:block">Your details</div>
-            </div>
-          </button>
-
-          <div className="flex-1 sm:w-16 max-w-16 h-[2px] bg-emerald-400/80 rounded-full" />
-
-          {/* Step 2: Payment (Active) */}
-          <button
-            onClick={() => setActiveStep(2)}
-            className="flex items-center gap-2 text-left cursor-pointer shrink-0"
-          >
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#00875a] text-white flex items-center justify-center font-bold text-xs ring-4 ring-emerald-100 shadow-xs">
-              2
-            </div>
-            <div>
-              <div className="font-bold text-emerald-800 text-[11px] sm:text-xs">Payment</div>
-              <div className="text-[9px] sm:text-[10px] text-slate-500 font-medium hidden xs:block">Choose method</div>
-            </div>
-          </button>
-
-          <div className="flex-1 sm:w-16 max-w-16 h-[2px] bg-slate-200 rounded-full" />
-
-          {/* Step 3: Review */}
-          <button
-            onClick={() => setActiveStep(3)}
-            className="flex items-center gap-2 text-left cursor-pointer opacity-70 hover:opacity-100 shrink-0"
-          >
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-100 border border-slate-300 text-slate-600 flex items-center justify-center font-bold text-xs">
-              3
-            </div>
-            <div>
-              <div className="font-semibold text-slate-700 text-[11px] sm:text-xs">Review</div>
-              <div className="text-[9px] sm:text-[10px] text-slate-400 hidden xs:block">Confirm order</div>
-            </div>
-          </button>
-        </div>
-
-        {/* STEP 1 MODAL / ACCORDION: If user clicks Shipping, allow editing */}
-        {activeStep === 1 && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                Shipping & Learner Details
-              </h3>
-              <span className="text-xs text-emerald-700 font-semibold">Step 1 of 3</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={shippingInfo.fullName}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, fullName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-600 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">Email (For Instant PDF License)</label>
-                <input
-                  type="email"
-                  value={shippingInfo.email}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-600 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">WhatsApp / Phone Number</label>
-                <input
-                  type="tel"
-                  value={shippingInfo.phone}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-600 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">State / Region</label>
-                <input
-                  type="text"
-                  value={shippingInfo.state}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, state: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-600 font-medium"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => {
-                  showToast('Shipping details saved!', 'success');
-                  setActiveStep(2);
-                }}
-                className="px-6 py-2.5 bg-[#00875a] hover:bg-[#00734c] text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-              >
-                <span>Proceed to Payment</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 3. MAIN SPLIT LAYOUT (LEFT 65% | RIGHT 35%) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          {/* ======================= LEFT COLUMN ======================= */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* PAYMENT METHOD CARD */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-5">
-              {/* Header */}
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                    Payment Method
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Choose your preferred payment method. Your information is 100% secure.
-                  </p>
-                </div>
-              </div>
-
-              {/* 4 Security Assurance Pills */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 py-2 px-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-700">
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-emerald-600" />
-                  <span>SSL Encrypted</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Zap className="w-3 h-3 text-sky-600" />
-                  <span>Cashfree Secure</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <CreditCard className="w-3 h-3 text-emerald-600" />
-                  <span>UPI & Cards</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>No Hidden Charges</span>
-                </div>
-              </div>
-
-              {/* Payment Option Radios */}
-              <div className="space-y-3">
-                {/* 1. UPI Option */}
-                <div
-                  onClick={() => setPaymentMethod('upi')}
-                  className={`relative rounded-xl border-2 p-4 cursor-pointer transition-all duration-200 ${
-                    paymentMethod === 'upi'
-                      ? 'border-emerald-600 bg-emerald-50/20 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  {/* "Most Popular" Pill */}
-                  <span className="absolute -top-2.5 left-8 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-xs">
-                    Most Popular
-                  </span>
-
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {/* Radio Circle */}
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          paymentMethod === 'upi'
-                            ? 'border-emerald-600 bg-emerald-600'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {paymentMethod === 'upi' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-
-                      {/* Title & Desc */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                            UPI (Google Pay, PhonePe, Paytm, etc.)
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Pay securely with any UPI app
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* App Logos on Right */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* GPay */}
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-slate-700 border border-slate-200">
-                        G Pay
-                      </span>
-                      {/* PhonePe */}
-                      <div className="w-6 h-6 rounded-full bg-[#5f259f] text-white flex items-center justify-center text-[10px] font-bold">
-                        पे
-                      </div>
-                      {/* Paytm */}
-                      <span className="px-1.5 py-0.5 rounded bg-sky-50 text-[10px] font-bold text-sky-700 border border-sky-200">
-                        Paytm
-                      </span>
-                      {/* BHIM / UPI icon */}
-                      <div className="w-6 h-6 rounded bg-emerald-700 text-white flex items-center justify-center text-[8px] font-black">
-                        UPI
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded Interactive UPI Sub-panel */}
-                  {paymentMethod === 'upi' && (
-                    <div className="mt-3.5 pt-3.5 border-t border-emerald-100/80 space-y-3 animate-in fade-in duration-150">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUpiTab('apps');
-                          }}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${
-                            upiTab === 'apps'
-                              ? 'bg-emerald-700 text-white shadow-xs'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          Quick UPI Apps
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUpiTab('id');
-                          }}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${
-                            upiTab === 'id'
-                              ? 'bg-emerald-700 text-white shadow-xs'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          Enter UPI ID
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUpiTab('qr');
-                          }}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${
-                            upiTab === 'qr'
-                              ? 'bg-emerald-700 text-white shadow-xs'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          Scan QR Code
-                        </button>
-                      </div>
-
-                      {upiTab === 'apps' && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                          {[
-                            { id: 'gpay', name: 'Google Pay', badge: 'GPay' },
-                            { id: 'phonepe', name: 'PhonePe', badge: 'पे' },
-                            { id: 'paytm', name: 'Paytm UPI', badge: 'Paytm' },
-                            { id: 'bhim', name: 'BHIM UPI', badge: 'BHIM' },
-                          ].map((app) => (
-                            <button
-                              key={app.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedUpiApp(app.id as any);
-                                showToast(`Selected ${app.name} for instant payment`);
-                              }}
-                              className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
-                                selectedUpiApp === app.id
-                                  ? 'border-emerald-600 bg-white ring-2 ring-emerald-100 shadow-xs'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              <span className="text-xs font-bold text-slate-800">{app.name}</span>
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                Fast
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {upiTab === 'id' && (
-                        <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            value={upiId}
-                            onChange={(e) => setUpiId(e.target.value)}
-                            placeholder="username@okhdfcbank"
-                            className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600 font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => showToast(`UPI ID ${upiId} verified!`, 'success')}
-                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg"
-                          >
-                            Verify
-                          </button>
-                        </div>
-                      )}
-
-                      {upiTab === 'qr' && (
-                        <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-center gap-4 text-center">
-                          <div className="w-20 h-20 bg-slate-950 p-1.5 rounded-lg flex items-center justify-center">
-                            {/* Visual QR Code Pattern */}
-                            <div className="w-full h-full bg-white grid grid-cols-4 p-1 gap-0.5">
-                              <div className="bg-black" />
-                              <div className="bg-black" />
-                              <div className="bg-white" />
-                              <div className="bg-black" />
-                              <div className="bg-white" />
-                              <div className="bg-black" />
-                              <div className="bg-black" />
-                              <div className="bg-white" />
-                              <div className="bg-black" />
-                              <div className="bg-white" />
-                              <div className="bg-black" />
-                              <div className="bg-black" />
-                            </div>
-                          </div>
-                          <div className="text-left text-xs">
-                            <div className="font-bold text-slate-900">Scan & Pay ₹{total}</div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              Use PhonePe, Google Pay, Paytm, or BHIM to scan
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Credit / Debit Card Option */}
-                <div
-                  onClick={() => setPaymentMethod('card')}
-                  className={`rounded-xl border-2 p-4 cursor-pointer transition-all duration-200 ${
-                    paymentMethod === 'card'
-                      ? 'border-emerald-600 bg-emerald-50/20 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          paymentMethod === 'card'
-                            ? 'border-emerald-600 bg-emerald-600'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {paymentMethod === 'card' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                          Credit / Debit Card
-                        </span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Visa, Mastercard, RuPay
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Logos */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-black text-blue-900 tracking-wider text-xs italic px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
-                        VISA
-                      </span>
-                      {/* Mastercard 2 circles */}
-                      <div className="flex items-center -space-x-1.5 bg-slate-100 px-1.5 py-1 rounded border border-slate-200">
-                        <div className="w-3.5 h-3.5 rounded-full bg-red-600" />
-                        <div className="w-3.5 h-3.5 rounded-full bg-amber-500 opacity-90" />
-                      </div>
-                      <span className="font-bold text-emerald-800 text-[10px] px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
-                        RuPay
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Card Form Expanded */}
-                  {paymentMethod === 'card' && (
-                    <div className="mt-3.5 pt-3.5 border-t border-emerald-100/80 space-y-3" onClick={(e) => e.stopPropagation()}>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">Card Number</label>
-                        <input
-                          type="text"
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600 font-mono"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">Expiry (MM/YY)</label>
-                          <input
-                            type="text"
-                            value={cardExpiry}
-                            onChange={(e) => setCardExpiry(e.target.value)}
-                            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600 font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">CVV</label>
-                          <input
-                            type="password"
-                            maxLength={4}
-                            value={cardCvv}
-                            onChange={(e) => setCardCvv(e.target.value)}
-                            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600 font-mono"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Net Banking */}
-                <div
-                  onClick={() => setPaymentMethod('netbanking')}
-                  className={`rounded-xl border-2 p-4 cursor-pointer transition-all duration-200 ${
-                    paymentMethod === 'netbanking'
-                      ? 'border-emerald-600 bg-emerald-50/20 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          paymentMethod === 'netbanking'
-                            ? 'border-emerald-600 bg-emerald-600'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {paymentMethod === 'netbanking' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                          Net Banking
-                        </span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          All major banks
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Bank Icons */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
-                        SBI
-                      </div>
-                      <div className="w-5 h-5 rounded-full bg-blue-900 text-white text-[8px] font-bold flex items-center justify-center">
-                        HDFC
-                      </div>
-                      <div className="w-5 h-5 rounded-full bg-orange-600 text-white text-[9px] font-bold flex items-center justify-center">
-                        i
-                      </div>
-                      <div className="w-5 h-5 rounded-full bg-rose-900 text-white text-[9px] font-bold flex items-center justify-center">
-                        AX
-                      </div>
-                    </div>
-                  </div>
-
-                  {paymentMethod === 'netbanking' && (
-                    <div className="mt-3.5 pt-3.5 border-t border-emerald-100/80 space-y-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {['HDFC Bank', 'State Bank of India', 'ICICI Bank', 'Axis Bank'].map((bank) => (
-                          <button
-                            key={bank}
-                            type="button"
-                            onClick={() => setSelectedBank(bank)}
-                            className={`p-2 rounded-lg border text-xs font-semibold transition-all ${
-                              selectedBank === bank
-                                ? 'border-emerald-600 bg-white text-emerald-800 ring-2 ring-emerald-100'
-                                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            {bank}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Wallets */}
-                <div
-                  onClick={() => setPaymentMethod('wallets')}
-                  className={`rounded-xl border-2 p-4 cursor-pointer transition-all duration-200 ${
-                    paymentMethod === 'wallets'
-                      ? 'border-emerald-600 bg-emerald-50/20 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          paymentMethod === 'wallets'
-                            ? 'border-emerald-600 bg-emerald-600'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {paymentMethod === 'wallets' && (
-                          <div className="w-2 h-2 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                          Wallets
-                        </span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Paytm, PhonePe, Amazon Pay, etc.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Wallet Icons */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="px-1.5 py-0.5 rounded bg-sky-50 text-[10px] font-bold text-sky-700 border border-sky-200">
-                        Paytm
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-[10px] font-bold text-purple-700 border border-purple-200">
-                        PhonePe
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-[10px] font-bold text-amber-800 border border-amber-200">
-                        amazon pay
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* LIMITED TIME OFFER TIMER CARD (Exact Match from Mockup) */}
-            <div className="relative rounded-2xl bg-[#f0fdf4] border border-emerald-300/80 p-5 sm:p-6 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                {/* Left side text & animated stopwatch */}
-                <div className="flex items-start gap-4">
-                  <div className="relative w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <Clock className="w-6 h-6 animate-pulse" />
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full ring-2 ring-white animate-ping" />
-                  </div>
-                  <div>
-                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider mb-1">
-                      Limited Time Offer
-                    </span>
-                    <h4 className="text-sm sm:text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                      Complete Your Order Now & Save Big!
-                    </h4>
-                    <p className="text-xs text-slate-600 mt-1 max-w-sm leading-relaxed">
-                      This special price won't last forever. Secure your study guide today and start your journey towards a better future!
-                    </p>
-                  </div>
-                </div>
-
-                {/* Right side countdown boxes */}
-                <div className="text-center shrink-0 self-center sm:self-auto">
-                  <div className="text-[11px] font-semibold text-slate-700 mb-1.5">
-                    Offer Ends In
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-900 font-mono">
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 rounded-lg bg-emerald-700 text-white flex items-center justify-center text-base font-bold shadow-xs">
-                        {String(timeLeft.hours).padStart(2, '0')}
-                      </div>
-                      <span className="text-[9px] text-slate-500 mt-1 font-sans">Hours</span>
-                    </div>
-                    <span className="font-bold text-emerald-700 -mt-3">:</span>
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 rounded-lg bg-emerald-700 text-white flex items-center justify-center text-base font-bold shadow-xs">
-                        {String(timeLeft.minutes).padStart(2, '0')}
-                      </div>
-                      <span className="text-[9px] text-slate-500 mt-1 font-sans">Minutes</span>
-                    </div>
-                    <span className="font-bold text-emerald-700 -mt-3">:</span>
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 rounded-lg bg-emerald-700 text-white flex items-center justify-center text-base font-bold shadow-xs">
-                        {String(timeLeft.seconds).padStart(2, '0')}
-                      </div>
-                      <span className="text-[9px] text-slate-500 mt-1 font-sans">Seconds</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* BIG VIBRANT GLOWING CTA BUTTON WITH ANIMATIONS */}
-            <div className="relative pt-2 text-center">
-              {/* Decorative hand-drawn radiating dash marks around button */}
-              <div className="absolute -top-1 left-1/4 transform -translate-x-12 hidden sm:block">
-                <svg width="34" height="24" viewBox="0 0 34 24" fill="none" className="text-emerald-500 animate-float-gentle">
-                  <path d="M4 18L10 12M16 6L16 2M26 12L32 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-              </div>
-
-              <div className="absolute -top-1 right-1/4 transform translate-x-12 hidden sm:block">
-                <svg width="34" height="24" viewBox="0 0 34 24" fill="none" className="text-emerald-500 animate-float-gentle">
-                  <path d="M30 18L24 12M18 6L18 2M8 12L2 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-              </div>
-
-              <button
-                id="proceed-to-pay-main-btn"
-                disabled={isProcessing}
-                onClick={handlePayNow}
-                className="w-full relative overflow-hidden rounded-full py-4 px-8 bg-gradient-to-r from-[#00875a] via-[#009b67] to-[#00744e] text-white text-base sm:text-lg font-bold font-['Plus_Jakarta_Sans',sans-serif] tracking-wide shadow-xl shadow-emerald-600/30 hover:shadow-emerald-600/45 active:scale-[0.99] transition-all cursor-pointer animate-pulse-glow flex items-center justify-center gap-2.5"
-              >
-                {/* Shimmer sweep effect across button */}
-                <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 animate-shimmer pointer-events-none" />
-
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Processing Payment...</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-5 h-5" />
-                    <span>Proceed to Pay ₹{total}</span>
-                    <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-                  </>
-                )}
-              </button>
-
-              <p className="text-xs text-slate-500 mt-2.5 flex items-center justify-center gap-1.5 font-medium">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Your payment is 100% secure and encrypted</span>
+              {/* Subtitle */}
+              <p className="text-slate-600 text-sm sm:text-base max-w-lg leading-relaxed">
+                Complete your payment securely with Cashfree and get instant access to your study materials.
               </p>
-            </div>
 
-            {/* WHY STUDENTS CHOOSE XYLEM LEARNING? */}
-            <div className="space-y-4 pt-4 border-t border-slate-200">
-              <h3 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] flex items-center gap-2">
-                <span className="text-emerald-600">🌱</span>
-                <span>Why Students Choose Xylem Learning?</span>
-              </h3>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center shadow-xs">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center mb-2">
-                    <BookOpen className="w-4 h-4" />
+              {/* 4 Trust Feature Badges */}
+              <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-3 max-w-lg">
+                {/* 1. 100% Secure Payments */}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
-                  <div className="text-xs font-bold text-slate-900 leading-tight">
-                    Expert Curated Content
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">By subject experts</p>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+                    100% Secure
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                    Payments
+                  </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center shadow-xs">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center mb-2">
-                    <CheckSquare className="w-4 h-4" />
+                {/* 2. Instant Access */}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
+                    <Zap className="w-5 h-5" />
                   </div>
-                  <div className="text-xs font-bold text-slate-900 leading-tight">
-                    500+ Practice Questions
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">With detailed solutions</p>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+                    Instant
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                    Access
+                  </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center shadow-xs">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center mb-2">
-                    <Zap className="w-4 h-4" />
+                {/* 3. Trusted by 1M+ */}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
+                    <Lock className="w-5 h-5" />
                   </div>
-                  <div className="text-xs font-bold text-slate-900 leading-tight">
-                    Flexible Learning
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Study anytime, anywhere</p>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+                    Trusted by
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                    1M+ Learners
+                  </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center shadow-xs">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center mb-2">
-                    <Award className="w-4 h-4" />
+                {/* 4. 24/7 Support */}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
+                    <Headphones className="w-5 h-5" />
                   </div>
-                  <div className="text-xs font-bold text-slate-900 leading-tight">
-                    Proven Results
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Trusted by 1M+ learners</p>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+                    24/7
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                    Support
+                  </span>
                 </div>
               </div>
+            </div>
 
-              {/* STUDENT TESTIMONIAL CARD (Dark Navy Card with Calligraphy) */}
-              <div className="relative overflow-hidden rounded-2xl bg-[#071d36] text-white p-5 sm:p-6 shadow-md border border-slate-800">
-                <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
-                  <div className="flex items-center sm:items-start gap-4">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-                      alt="Anjali S"
-                      className="w-12 h-12 rounded-full object-cover border-2 border-emerald-400 shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="space-y-1">
-                      {/* 5 Stars */}
-                      <div className="flex items-center gap-0.5 text-amber-400">
+            {/* Right Student Hero Image with Calligraphy */}
+            <div className="md:col-span-5 lg:col-span-4 relative flex justify-center md:justify-end mt-2 md:mt-0">
+              <div className="relative w-56 sm:w-64 md:w-72 aspect-[4/5] rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-emerald-100/50">
+                <img
+                  src="/images/student-hero.jpg"
+                  alt="Student Aspirant"
+                  className="w-full h-full object-cover object-center"
+                  loading="eager"
+                  onError={(e) => {
+                    // High-quality fallback if local file path is loading
+                    (e.target as HTMLImageElement).src =
+                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80';
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+              </div>
+
+              {/* Calligraphy Overlay: Better Preparation. Bigger Dreams. */}
+              <div className="absolute -top-3 left-0 sm:left-4 md:-left-8 transform -rotate-6 select-none pointer-events-none z-10">
+                <div className="font-['Caveat',cursive] text-2xl sm:text-3xl lg:text-[32px] text-emerald-800 font-bold leading-none drop-shadow-sm">
+                  <div>Better</div>
+                  <div>Preparation.</div>
+                  <div className="text-emerald-700">Bigger Dreams.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 3. MAIN CHECKOUT SECTION (Order Summary & Cashfree Payment Cards)        */}
+      {/* ========================================================================= */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-start">
+          {/* ===================================================================== */}
+          {/* LEFT COLUMN: Order Summary Card                                      */}
+          {/* ===================================================================== */}
+          <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xs border border-slate-200/80 space-y-6">
+            <h2 className="text-xl font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+              Order Summary
+            </h2>
+
+            {/* Product Item Block */}
+            <div className="flex items-start gap-4 pb-6 border-b border-slate-100">
+              {/* Cover Thumbnail */}
+              <div className="w-20 h-28 shrink-0 rounded-xl overflow-hidden shadow-md border border-slate-100 bg-slate-50 flex items-center justify-center">
+                {activeBook.coverImage ? (
+                  <img
+                    src={activeBook.coverImage}
+                    alt={activeBook.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <BookCover book={activeBook} size="sm" showShadow={false} />
+                )}
+              </div>
+
+              {/* Title, Rating & Description */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug font-['Plus_Jakarta_Sans',sans-serif]">
+                      {activeBook.title}
+                    </h3>
+
+                    {/* Star Rating */}
+                    <div className="flex items-center gap-1 mt-1 text-xs text-slate-500 font-medium">
+                      <div className="flex items-center text-amber-400">
                         {[...Array(5)].map((_, i) => (
                           <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
                         ))}
                       </div>
-                      <p className="text-xs text-slate-200 italic leading-relaxed max-w-sm">
-                        "Xylem Learning was a game changer for my IELTS preparation. The mock tests and detailed explanations really helped me score higher!"
-                      </p>
-                      <div className="text-[11px] text-emerald-400 font-semibold pt-0.5">
-                        – Anjali S, IELTS Aspirant
-                      </div>
+                      <span className="font-bold text-slate-700 ml-0.5">
+                        {activeBook.rating || 4.8}
+                      </span>
+                      <span>({activeBook.reviewCount || 124} reviews)</span>
                     </div>
+
+                    {/* Description */}
+                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">
+                      {activeBook.description ||
+                        'Complete study guide for IELTS with 500+ practice questions and full-length mock tests.'}
+                    </p>
                   </div>
 
-                  {/* Calligraphy handwritten script */}
-                  <div className="text-right sm:self-center font-script text-2xl sm:text-3xl text-emerald-300 select-none transform rotate-[-4deg] shrink-0">
-                    <div>Real People.</div>
-                    <div>Real Success.</div>
+                  {/* Price Column */}
+                  <div className="text-right shrink-0">
+                    <div className="text-xl sm:text-2xl font-black text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                      ₹{displayTotal}
+                    </div>
+                    <span className="inline-block bg-[#00a884] text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider mt-0.5">
+                      {discountPercent}% OFF
+                    </span>
+                    <div className="text-xs text-slate-400 line-through mt-0.5">
+                      ₹{displayOriginalPrice}
+                    </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Price Calculations */}
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-bold text-slate-900">₹{displaySubtotal}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-700 font-medium">Discount Applied</span>
+                  <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200/80 uppercase">
+                    SPECIAL OFFER
+                  </span>
+                </div>
+                <span className="font-bold text-emerald-600">- ₹{displayDiscount}</span>
+              </div>
+            </div>
+
+            {/* Total Amount Highlight Box */}
+            <div className="bg-[#eef9f5] border border-emerald-100 rounded-2xl p-4 sm:p-5 flex items-center justify-between">
+              <div>
+                <div className="text-base sm:text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                  Total Amount
+                </div>
+                <div className="text-xs font-semibold text-emerald-700 mt-0.5">
+                  You save ₹{displayDiscount}
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                ₹{displayTotal}
+              </div>
+            </div>
+
+            {/* Security Assurance Banner (Visible in Desktop Mockup) */}
+            <div className="bg-emerald-50/50 border border-emerald-100/80 rounded-2xl p-4 flex items-center gap-3.5">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <div className="text-xs font-bold text-slate-900">
+                  Your purchase is 100% secure
+                </div>
+                <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  We use industry-standard encryption to protect your data and payments.
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ======================= RIGHT COLUMN (Sidebar) ======================= */}
-          <div className="lg:col-span-5 space-y-5">
-            {/* BOOK PREVIEW CARD (Exact Match from Mockup) */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-              {/* Header Badges */}
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-700 text-white text-[11px] font-bold">
-                  Save ₹{savingsAmount > 0 ? savingsAmount : 400}
-                </span>
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
-                  <Clock className="w-3 h-3 text-emerald-600" />
-                  <span>Limited Time Offer</span>
-                </span>
+          {/* ===================================================================== */}
+          {/* RIGHT COLUMN: Cashfree Payments Card                                 */}
+          {/* ===================================================================== */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-slate-200/80 text-center flex flex-col justify-between space-y-6">
+            <div className="space-y-4">
+              {/* Cashfree Logo */}
+              <div className="flex justify-center pt-2">
+                <CashfreeLogo className="h-10" />
               </div>
 
-              {/* Book Content Split: Cover Left | Info Right */}
-              <div className="grid grid-cols-12 gap-3.5 items-center">
-                {/* 3D Cover */}
-                <div className="col-span-4 flex justify-center">
-                  <BookCover book={activeBook} size="sm" showShadow={true} />
-                </div>
-
-                {/* Info */}
-                <div className="col-span-8 space-y-1.5">
-                  <h4 className="text-sm font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] leading-tight line-clamp-2">
-                    {activeBook.title}
-                  </h4>
-
-                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                    <div className="flex text-amber-400">
-                      <Star className="w-3.5 h-3.5 fill-amber-400" />
-                    </div>
-                    <span className="font-bold text-slate-800">{activeBook.rating}</span>
-                    <span className="text-slate-400">({activeBook.reviewCount} reviews)</span>
-                    {activeBook.buyersCount !== undefined && activeBook.buyersCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <Users className="w-3 h-3 text-emerald-600" />
-                        <span>{activeBook.buyersCount.toLocaleString()} bought</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Included Add-ons Pills if configured */}
-                  {primaryItem?.selectedAddons && primaryItem.selectedAddons.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 pt-0.5">
-                      {primaryItem.selectedAddons.map((addon) => (
-                        <span
-                          key={addon.id}
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200"
-                        >
-                          {addon.name}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <ul className="space-y-1 text-[11px] text-slate-600 pt-1">
-                      <li className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                        <span>Complete syllabus coverage</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                        <span>500+ practice questions</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                        <span>Full-length mock tests</span>
-                      </li>
-                    </ul>
-                  )}
-
-                  {/* Pricing row */}
-                  <div className="flex items-baseline gap-2 pt-2">
-                    {originalPrice > currentPrice && (
-                      <span className="text-xs text-slate-400 line-through">
-                        ₹{originalPrice}
-                      </span>
-                    )}
-                    <span className="text-xl font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                      ₹{currentPrice}
-                    </span>
-                    {originalPrice > currentPrice && (
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                        {Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}% OFF
-                      </span>
-                    )}
-                  </div>
-                </div>
+              {/* RBI Licensed Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50/80 border border-emerald-200/90 text-emerald-800 text-xs font-bold">
+                <Check className="w-3.5 h-3.5 text-emerald-700 stroke-[3]" />
+                <span>RBI Licensed Payment Aggregator</span>
               </div>
 
-              {/* Highlight bar: You Save ₹... */}
-              <div className="bg-[#ecfdf5] border border-emerald-200/80 rounded-xl p-2.5 text-center text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                <span>You Save ₹{savingsAmount > 0 ? savingsAmount : 400}!</span>
-              </div>
-            </div>
-
-            {/* ORDER SUMMARY CARD */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3.5">
-              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <CheckSquare className="w-3 h-3" />
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-['Plus_Jakarta_Sans',sans-serif]">
-                    Order Summary
-                  </h4>
-                </div>
-                <span className="text-[11px] text-slate-500">
-                  {cart.reduce((s, i) => s + i.quantity, 0) || 1} Item(s)
-                </span>
+              {/* Descriptive Heading */}
+              <div className="pt-2">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                  You will be redirected to Cashfree for secure payment
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto leading-relaxed mt-2">
+                  Click the button below to proceed to Cashfree's secure payment page. You can complete your payment using your preferred method.
+                </p>
               </div>
 
-              {/* Itemized Cart List with Add-ons */}
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1 divide-y divide-slate-100">
-                {cart.length > 0 ? (
-                  cart.map((item, idx) => (
-                    <div key={`${item.bookId}-${idx}`} className="pt-2 first:pt-0 space-y-1.5">
-                      <div className="flex items-start justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-6 h-8 bg-slate-900 rounded shrink-0 flex items-center justify-center text-white text-[7px] font-bold uppercase">
-                            {item.format === 'physical' ? 'PRINT' : 'DIGITAL'}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-slate-900 font-bold block truncate">
-                              {item.book.title}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              Qty: {item.quantity}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="font-extrabold text-slate-900 shrink-0">
-                          ₹{item.price * item.quantity}
-                        </span>
-                      </div>
-
-                      {/* Selected add-ons list */}
-                      {item.selectedAddons && item.selectedAddons.length > 0 && (
-                        <div className="pl-8 space-y-1 text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Included Add-ons ({item.selectedAddons.length}):
-                          </div>
-                          {item.selectedAddons.map((addon) => {
-                            const isFree =
-                              item.freeAddonDiscount &&
-                              item.freeAddonDiscount > 0 &&
-                              addon.price === item.freeAddonDiscount;
-                            return (
-                              <div
-                                key={addon.id}
-                                className="flex items-center justify-between text-slate-600"
-                              >
-                                <span className="truncate flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                  <span className="truncate">{addon.name}</span>
-                                </span>
-                                {isFree ? (
-                                  <span className="font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded text-[9px] uppercase">
-                                    FREE DEAL
-                                  </span>
-                                ) : (
-                                  <span className="font-semibold text-slate-700">
-                                    ₹{addon.price}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Free 3rd addon deal note */}
-                      {item.freeAddonDiscount && item.freeAddonDiscount > 0 && (
-                        <div className="pl-8 text-[10px] font-bold text-emerald-700 flex items-center gap-1">
-                          <span>🎁 "Buy 2 Get 3rd Free" Applied (-₹{item.freeAddonDiscount * item.quantity})</span>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-slate-800 font-medium truncate">
-                      {activeBook.title}
-                    </span>
-                    <span className="font-bold text-slate-900 shrink-0">₹{currentPrice}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Coupon Code Section */}
-              <div className="pt-2 border-t border-slate-100">
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
-                    <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
-                      <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{appliedCoupon}</span>
-                      <span className="font-normal text-emerald-700">(-₹{discount})</span>
-                    </div>
-                    <button
-                      onClick={removeCoupon}
-                      className="text-[11px] font-bold text-rose-600 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      placeholder="Coupon: XYLEM20 / FIRST50"
-                      className="flex-1 text-[11px] px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-emerald-600 uppercase"
-                    />
-                    <button
-                      type="submit"
-                      className="px-3 py-1.5 bg-[#00875a] hover:bg-[#00734c] text-white text-[11px] font-semibold rounded-lg"
-                    >
-                      Apply
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              {/* Price Breakdown */}
-              <div className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span className="font-semibold text-slate-900">
-                    ₹{subtotal > 0 ? subtotal : currentPrice}
-                  </span>
-                </div>
-
-                {totalFreeAddonDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-bold">
-                    <span className="flex items-center gap-1">
-                      <span>🎁 3rd Add-on Deal</span>
-                    </span>
-                    <span>FREE (₹0)</span>
-                  </div>
-                )}
-
-                {discount > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span className="flex items-center gap-1">
-                      <span>Discount</span>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
-                        {appliedCoupon ? appliedCoupon : 'SPECIAL OFFER'}
-                      </span>
-                    </span>
-                    <span>-₹{discount}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between">
-                  <span>Delivery</span>
-                  <span className="font-semibold text-emerald-700">
-                    {deliveryFee > 0 ? `₹${deliveryFee}` : 'FREE'}
-                  </span>
-                </div>
-
-                <div className="border-t border-slate-200 pt-3 flex justify-between items-baseline">
-                  <span className="text-sm font-bold text-slate-900">Total</span>
-                  <span className="text-2xl font-bold text-emerald-700 font-['Plus_Jakarta_Sans',sans-serif]">
-                    ₹{total > 0 ? total : currentPrice}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* TRUST & REASSURANCE BOXES (Mockup Right Side) */}
-            <div className="space-y-3">
-              {/* Box 1: 100% Secure Checkout */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-col gap-2.5 shadow-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                      100% Secure Checkout
-                    </h5>
-                    <p className="text-[11px] text-slate-500">Your information is safe with us.</p>
-                  </div>
-                </div>
-
-                {/* Logos */}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100 px-2 text-slate-600">
-                  <span className="text-[10px] font-black text-emerald-800">UPI</span>
-                  <span className="text-[11px] font-black text-blue-900 italic">VISA</span>
-                  <div className="flex items-center -space-x-1">
-                    <div className="w-3.5 h-3.5 rounded-full bg-red-600" />
-                    <div className="w-3.5 h-3.5 rounded-full bg-amber-500 opacity-90" />
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-800">RuPay</span>
-                </div>
-              </div>
-
-              {/* Box 2: Instant Access After Payment */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                      Instant Access After Payment
-                    </h5>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      Get your PDF immediately in your email and start learning today!
-                    </p>
-                  </div>
-                </div>
-
-                <div className="relative shrink-0">
-                  <div className="w-10 h-12 bg-slate-100 border border-slate-300 rounded flex flex-col items-center justify-center text-slate-700 font-bold text-[8px]">
-                    <Download className="w-3.5 h-3.5 text-slate-500 mb-0.5" />
-                    PDF
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[9px] font-bold">
-                    ✓
-                  </div>
-                </div>
-              </div>
-
-              {/* Box 3: Need Help Box */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                    <Headphones className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                      Need Help?
-                    </h5>
-                    <p className="text-[11px] text-slate-500">Our support team is here for you.</p>
-                  </div>
-                </div>
-
+              {/* BIG EMERALD PROCEED TO PAYMENT BUTTON */}
+              <div className="pt-2">
                 <button
-                  onClick={() => setIsContactModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-lg border border-slate-300 hover:border-emerald-600 text-xs font-semibold text-slate-700 hover:text-emerald-700 transition-colors"
+                  onClick={handleProceedToPayment}
+                  disabled={isProcessing}
+                  id="proceed-to-payment-btn"
+                  className="w-full py-4 px-6 rounded-xl bg-[#00704a] hover:bg-[#005a3b] active:scale-[0.99] text-white text-base sm:text-lg font-bold shadow-lg shadow-emerald-900/15 transition-all cursor-pointer flex items-center justify-center gap-2.5"
                 >
-                  Contact Us →
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Redirecting to Cashfree...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-5 h-5 text-white/90" />
+                      <span>Proceed to Payment</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               </div>
 
-              {/* Box 4: Mini 3-badge Row */}
-              <div className="grid grid-cols-3 gap-2 py-3 px-2 text-center text-slate-600">
+              {/* 3 Security Badges */}
+              <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-100 text-center">
                 <div className="flex flex-col items-center">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 mb-1" />
-                  <span className="text-[10px] font-semibold">100% Secure Payments</span>
+                  <Lock className="w-4 h-4 text-emerald-700 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-800">256-bit</span>
+                  <span className="text-[10px] text-slate-500">SSL Encryption</span>
                 </div>
                 <div className="flex flex-col items-center">
-                  <Zap className="w-4 h-4 text-emerald-600 mb-1" />
-                  <span className="text-[10px] font-semibold">Instant Download</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-700 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-800">PCI DSS</span>
+                  <span className="text-[10px] text-slate-500">Compliant</span>
                 </div>
                 <div className="flex flex-col items-center">
-                  <Award className="w-4 h-4 text-emerald-600 mb-1" />
-                  <span className="text-[10px] font-semibold">Trusted Worldwide</span>
+                  <Shield className="w-4 h-4 text-emerald-700 mb-1" />
+                  <span className="text-[11px] font-bold text-slate-800">Fraud Protection</span>
+                  <span className="text-[10px] text-slate-500">Powered by AI</span>
                 </div>
               </div>
+            </div>
 
-              {/* Box 5: Calligraphy script tagline */}
-              <div className="text-center pt-2 select-none">
-                <div className="font-script text-2xl sm:text-3xl text-emerald-900 transform rotate-[-2deg]">
-                  Better Preparation.
-                </div>
-                <div className="font-script text-2xl sm:text-3xl text-emerald-800 -mt-2 transform rotate-[-1deg]">
-                  Brighter Future.
-                </div>
-              </div>
+            {/* Powered by Cashfree Footer Pill */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex items-center justify-center gap-2 text-xs text-slate-600 mt-4">
+              <span className="font-bold text-slate-800">Powered by Cashfree Payments</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-slate-500">India's most trusted payment gateway</span>
             </div>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* 4. SHOP WITH CONFIDENCE TRUST BAR                                        */}
+        {/* ========================================================================= */}
+        <section className="bg-white rounded-3xl p-5 sm:p-7 shadow-xs border border-slate-200/80">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+            {/* Left Header */}
+            <div className="flex items-center gap-3.5 text-left w-full lg:w-auto">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                  Shop with Confidence
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Your data and payments are always protected with industry-leading security standards.
+                </p>
+              </div>
+            </div>
+
+            {/* Right 4 Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 w-full lg:w-auto text-center">
+              <div className="flex flex-col items-center">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 mb-1" />
+                <span className="text-xs font-bold text-slate-800">RBI</span>
+                <span className="text-[10px] text-slate-500">Licensed</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <Lock className="w-4 h-4 text-emerald-700 mb-1" />
+                <span className="text-xs font-bold text-slate-800">PCI DSS</span>
+                <span className="text-[10px] text-slate-500">Compliant</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <ShieldCheck className="w-4 h-4 text-emerald-700 mb-1" />
+                <span className="text-xs font-bold text-slate-800">256-bit</span>
+                <span className="text-[10px] text-slate-500">SSL Encryption</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <Shield className="w-4 h-4 text-emerald-700 mb-1" />
+                <span className="text-xs font-bold text-slate-800">Fraud Detection</span>
+                <span className="text-[10px] text-slate-500">Powered by AI</span>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* Sleek Minimal Dark Navy Checkout Footer (Matching Mockup) */}
-      <footer className="mt-14 bg-[#071d36] text-slate-300 py-6 border-t border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-          {/* Logo on white pill */}
-          <div className="inline-block bg-white p-1.5 rounded-lg shadow-xs cursor-pointer" onClick={() => setCurrentView('home')}>
-            <XylemLogo size="sm" showTagline={true} />
+      {/* ========================================================================= */}
+      {/* 5. BOTTOM FOOTER WITH LANDSCAPE & CALLIGRAPHY                           */}
+      {/* ========================================================================= */}
+      <footer className="relative bg-[#043326] text-white pt-12 pb-14 overflow-hidden mt-auto">
+        {/* Subtle landscape hill graphic / gradient */}
+        <div
+          className="absolute inset-0 opacity-15 bg-cover bg-center pointer-events-none"
+          style={{
+            backgroundImage:
+              'url("https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80")',
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#022018] via-transparent to-transparent pointer-events-none" />
+
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-8 text-center sm:text-left">
+          {/* Left Handwritten Script */}
+          <div className="font-['Caveat',cursive] text-3xl sm:text-4xl lg:text-[38px] text-emerald-200/95 leading-tight select-none transform -rotate-2">
+            <div>Learn Today.</div>
+            <div className="text-white">Build Your Tomorrow.</div>
           </div>
 
-          {/* Links */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-slate-300 font-medium">
-            <button onClick={() => setCurrentView('about')} className="hover:text-emerald-400 transition-colors cursor-pointer">About Us</button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => showToast('FAQ section opening...')} className="hover:text-emerald-400 transition-colors cursor-pointer">FAQ</button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => setIsContactModalOpen(true)} className="hover:text-emerald-400 transition-colors cursor-pointer">Contact Us</button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => showToast('Privacy Policy: All personal and payment information is 256-bit SSL encrypted.')} className="hover:text-emerald-400 transition-colors cursor-pointer">Privacy Policy</button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => showToast('Terms: Instant digital delivery upon payment verification.')} className="hover:text-emerald-400 transition-colors cursor-pointer">Terms & Conditions</button>
-          </div>
-
-          {/* Social Icons & Copyright */}
-          <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Right Brand & Categories */}
+          <div className="flex flex-col items-center sm:items-end space-y-2">
             <div className="flex items-center gap-2">
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="w-7 h-7 rounded-full bg-slate-800 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors">
-                <Instagram className="w-3.5 h-3.5" />
-              </a>
-              <a href="https://youtube.com" target="_blank" rel="noreferrer" className="w-7 h-7 rounded-full bg-slate-800 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors">
-                <Youtube className="w-3.5 h-3.5" />
-              </a>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="w-7 h-7 rounded-full bg-slate-800 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors">
-                <Facebook className="w-3.5 h-3.5" />
-              </a>
-              <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="w-7 h-7 rounded-full bg-slate-800 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors">
-                <Linkedin className="w-3.5 h-3.5" />
-              </a>
+              <span className="text-xl sm:text-2xl font-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif] text-white">
+                XYLEM
+              </span>
+              <span className="text-xs font-bold tracking-widest uppercase text-emerald-400">
+                LEARNING
+              </span>
             </div>
-            <span className="text-[11px] text-slate-400">
-              © 2025 Xylem Learning. All rights reserved.
-            </span>
+            <div className="text-[10px] tracking-widest uppercase text-emerald-300/80 font-bold">
+              LEARN • PRACTICE • ACHIEVE
+            </div>
+
+            {/* Category links */}
+            <div className="flex items-center gap-3 text-xs text-emerald-100/70 pt-2 font-medium">
+              <button
+                onClick={() => navigateToCatalog('IELTS')}
+                className="hover:text-white transition-colors"
+              >
+                IELTS
+              </button>
+              <span>|</span>
+              <button
+                onClick={() => navigateToCatalog('OET')}
+                className="hover:text-white transition-colors"
+              >
+                OET
+              </button>
+              <span>|</span>
+              <button
+                onClick={() => navigateToCatalog('PTE')}
+                className="hover:text-white transition-colors"
+              >
+                PTE
+              </button>
+              <span>|</span>
+              <button
+                onClick={() => navigateToCatalog('German')}
+                className="hover:text-white transition-colors"
+              >
+                GERMAN
+              </button>
+            </div>
           </div>
         </div>
       </footer>
-
-      {/* PAYMENT PROCESSING OVERLAY MODAL */}
-      {isProcessing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-5 shadow-2xl border border-slate-200">
-            <div className="relative w-20 h-20 mx-auto">
-              <div className="w-20 h-20 rounded-full border-4 border-emerald-100 border-t-emerald-600 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Lock className="w-8 h-8 text-emerald-600" />
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                Processing Secure Order
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 font-mono">
-                Amount: ₹{total > 0 ? total : currentPrice}
-              </p>
-            </div>
-
-            <div className="bg-emerald-50 rounded-xl p-3 text-xs text-emerald-800 font-medium animate-pulse">
-              {processingStatus}
-            </div>
-
-            <p className="text-[11px] text-slate-400">
-              Please do not refresh or close this window while we verify your transaction.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
