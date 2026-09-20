@@ -170,108 +170,86 @@ export const CheckoutView: React.FC = () => {
       </header>
 
       {/* ========================================================================= */}
-      {/* 2. HERO BANNER SECTION (You're Almost There! + Student Photo)            */}
+      {/* 2. HERO BANNER SECTION (You're Almost There!)                            */}
       {/* ========================================================================= */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#eaf6f2] via-[#f2faf7] to-[#f8fafc] pt-6 sm:pt-10 pb-8 sm:pb-12 border-b border-slate-100">
+      <section className="relative overflow-hidden bg-gradient-to-b from-[#eaf6f2] via-[#f2faf7] to-[#f8fafc] pt-6 sm:pt-10 pb-8 sm:pb-10 border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-            {/* Left Headline & Trust Badges */}
-            <div className="md:col-span-7 lg:col-span-8 space-y-3 sm:space-y-4">
-              {/* Secure Checkout Pill */}
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200/90 text-emerald-800 text-xs font-bold shadow-xs">
-                <Lock className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Secure Checkout</span>
-              </div>
+          <div className="max-w-2xl mx-auto text-center md:text-left md:mx-0 space-y-3 sm:space-y-4">
+            {/* Secure Checkout Pill */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200/90 text-emerald-800 text-xs font-bold shadow-xs">
+              <Lock className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Secure Checkout</span>
+            </div>
 
-              {/* Main Heading */}
-              <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black text-slate-900 tracking-tight font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
-                You’re Almost There!
-              </h1>
+            {/* Main Heading */}
+            <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-black text-slate-900 tracking-tight font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
+              You’re Almost There!
+            </h1>
 
-              {/* Subtitle */}
-              <p className="text-slate-600 text-sm sm:text-base max-w-lg leading-relaxed">
-                Complete your payment securely with Cashfree and get instant access to your study materials.
-              </p>
+            {/* Subtitle */}
+            <p className="text-slate-600 text-sm sm:text-base leading-relaxed max-w-xl">
+              Complete your payment securely with Cashfree and get instant access to your study materials.
+            </p>
 
-              {/* 4 Trust Feature Badges */}
-              <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-3 max-w-lg">
-                {/* 1. 100% Secure Payments */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+            {/* 4 Trust Feature Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-3 max-w-xl">
+              {/* 1. 100% Secure Payments */}
+              <div className="flex items-center gap-2.5 sm:flex-col sm:text-center p-2 rounded-xl bg-white/70 sm:bg-transparent border sm:border-0 border-slate-200/60 shadow-xs sm:shadow-none">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 sm:mx-auto mb-0 sm:mb-1.5 shadow-xs">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                     100% Secure
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="block text-[10px] sm:text-[11px] text-slate-500">
                     Payments
                   </span>
                 </div>
+              </div>
 
-                {/* 2. Instant Access */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
-                    <Zap className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+              {/* 2. Instant Access */}
+              <div className="flex items-center gap-2.5 sm:flex-col sm:text-center p-2 rounded-xl bg-white/70 sm:bg-transparent border sm:border-0 border-slate-200/60 shadow-xs sm:shadow-none">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 sm:mx-auto mb-0 sm:mb-1.5 shadow-xs">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                     Instant
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="block text-[10px] sm:text-[11px] text-slate-500">
                     Access
                   </span>
                 </div>
+              </div>
 
-                {/* 3. Trusted by 1M+ */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
-                    <Lock className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+              {/* 3. Trusted by 1M+ Learners */}
+              <div className="flex items-center gap-2.5 sm:flex-col sm:text-center p-2 rounded-xl bg-white/70 sm:bg-transparent border sm:border-0 border-slate-200/60 shadow-xs sm:shadow-none">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 sm:mx-auto mb-0 sm:mb-1.5 shadow-xs">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                     Trusted by
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="block text-[10px] sm:text-[11px] text-slate-500">
                     1M+ Learners
                   </span>
                 </div>
+              </div>
 
-                {/* 4. 24/7 Support */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mb-1.5 shadow-xs">
-                    <Headphones className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
+              {/* 4. 24/7 Support */}
+              <div className="flex items-center gap-2.5 sm:flex-col sm:text-center p-2 rounded-xl bg-white/70 sm:bg-transparent border sm:border-0 border-slate-200/60 shadow-xs sm:shadow-none">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 sm:mx-auto mb-0 sm:mb-1.5 shadow-xs">
+                  <Headphones className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                     24/7
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500">
+                  <span className="block text-[10px] sm:text-[11px] text-slate-500">
                     Support
                   </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Student Hero Image with Calligraphy */}
-            <div className="md:col-span-5 lg:col-span-4 relative flex justify-center md:justify-end mt-2 md:mt-0">
-              <div className="relative w-56 sm:w-64 md:w-72 aspect-[4/5] rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-emerald-100/50">
-                <img
-                  src="/images/student-hero.jpg"
-                  alt="Student Aspirant"
-                  className="w-full h-full object-cover object-center"
-                  loading="eager"
-                  onError={(e) => {
-                    // High-quality fallback if local file path is loading
-                    (e.target as HTMLImageElement).src =
-                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80';
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-              </div>
-
-              {/* Calligraphy Overlay: Better Preparation. Bigger Dreams. */}
-              <div className="absolute -top-3 left-0 sm:left-4 md:-left-8 transform -rotate-6 select-none pointer-events-none z-10">
-                <div className="font-['Caveat',cursive] text-2xl sm:text-3xl lg:text-[32px] text-emerald-800 font-bold leading-none drop-shadow-sm">
-                  <div>Better</div>
-                  <div>Preparation.</div>
-                  <div className="text-emerald-700">Bigger Dreams.</div>
                 </div>
               </div>
             </div>
