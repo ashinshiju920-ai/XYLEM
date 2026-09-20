@@ -16,6 +16,9 @@ declare global {
 export const GOOGLE_SHEET_COPY_URL =
   'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/copy';
 
+export const CASHFREE_PAYMENT_FORM_URL =
+  'https://payments.cashfree.com/forms/study-portal-buy';
+
 /**
  * Ensures Cashfree v3 JS SDK is injected into the DOM and initialized with correct mode (production vs sandbox).
  */

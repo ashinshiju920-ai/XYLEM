@@ -32,7 +32,7 @@ import { BookCover } from '../components/BookCover';
 import { PaymentMethod, Book } from '../types';
 import { BOOKS } from '../data/books';
 import { XylemLogo } from '../components/XylemLogo';
-import { loadCashfreeSDK, createCashfreeOrder, GOOGLE_SHEET_COPY_URL } from '../utils/cashfree';
+import { loadCashfreeSDK, createCashfreeOrder, GOOGLE_SHEET_COPY_URL, CASHFREE_PAYMENT_FORM_URL } from '../utils/cashfree';
 
 export const CheckoutView: React.FC = () => {
   const {
@@ -176,11 +176,13 @@ export const CheckoutView: React.FC = () => {
         redirectTarget: '_self',
       });
     } catch (err: any) {
-      console.error('Cashfree checkout error:', err);
-      const msg = err.message || 'Payment could not be completed';
-      showToast(msg, 'warning');
-      setIsProcessing(false);
-      setProcessingStatus('');
+      console.warn('Direct Cashfree session failed, opening official Cashfree payment form:', err);
+      setProcessingStatus('Redirecting to Cashfree Secure Payment Form...');
+      showToast('Redirecting to Cashfree Secure Checkout...', 'info');
+      // Seamless guaranteed fallback to official Cashfree form
+      setTimeout(() => {
+        window.location.href = CASHFREE_PAYMENT_FORM_URL;
+      }, 700);
     }
   };
 
