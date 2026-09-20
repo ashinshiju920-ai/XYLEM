@@ -1,3 +1,5 @@
+import { requireAdmin } from '../utils/auth.js';
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS, HEAD',
@@ -90,6 +92,10 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
+
+    const authError = await requireAdmin(request, env);
+    if (authError) return authError;
+
     const cloudName = env?.CLOUDINARY_CLOUD_NAME;
     const apiKey = env?.CLOUDINARY_API_KEY;
     const apiSecret = env?.CLOUDINARY_API_SECRET;

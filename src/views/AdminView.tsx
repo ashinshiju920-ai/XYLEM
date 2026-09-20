@@ -35,6 +35,8 @@ import {
   ArrowUpDown,
   Users,
   MessageSquare,
+  Lock,
+  LogOut,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath, ProductAddon } from '../types';
@@ -105,6 +107,82 @@ export const AdminView: React.FC = () => {
   } = useShop();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'arrange' | 'homepage_images' | 'pdfs' | 'reviews' | 'orders'>('overview');
+
+  // Admin Session & Authentication State
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/admin/session', {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setIsAuthenticated(Boolean(data?.authenticated));
+          }
+        } else {
+          if (isMounted) setIsAuthenticated(false);
+        }
+      } catch {
+        if (isMounted) setIsAuthenticated(false);
+      } finally {
+        if (isMounted) setIsCheckingAuth(false);
+      }
+    }
+    checkAuth();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminPassword.trim()) {
+      setLoginError('Password is required');
+      return;
+    }
+    setIsLoggingIn(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        setIsAuthenticated(true);
+        setAdminPassword('');
+        showToast('Welcome to Admin Dashboard', 'success');
+        refreshProductsFromCloud();
+      } else {
+        setLoginError(data?.error || 'Invalid credentials');
+      }
+    } catch {
+      setLoginError('Network error connecting to login server');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {}
+    setIsAuthenticated(false);
+    showToast('Logged out successfully');
+  };
 
   // Products filter
   const [productCategoryFilter, setProductCategoryFilter] = useState<ExamCategory | 'All'>('All');
@@ -828,6 +906,93 @@ export const AdminView: React.FC = () => {
     showToast(`Moved to position #${targetRank} in ${arrangeCategory}!`, 'success');
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#071322] flex flex-col items-center justify-center p-6 text-white font-['DM_Sans',sans-serif]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          <p className="text-xs font-semibold text-slate-400 tracking-wide">
+            Verifying admin session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#071322] flex flex-col items-center justify-center p-4 sm:p-6 text-white font-['DM_Sans',sans-serif]">
+        <div className="w-full max-w-md bg-[#0e2238] border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="text-center space-y-2 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black font-['Plus_Jakarta_Sans',sans-serif] tracking-tight text-white">
+              Admin Console
+            </h2>
+            <p className="text-xs text-slate-400">
+              Please enter your administrator password to proceed.
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                Password
+              </label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => {
+                  setAdminPassword(e.target.value);
+                  if (loginError) setLoginError('');
+                }}
+                placeholder="Enter admin password"
+                autoFocus
+                required
+                className="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3 bg-[#00875a] hover:bg-[#00734c] disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isLoggingIn ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Sign In to Admin</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentView('home')}
+              className="w-full py-2.5 bg-transparent hover:bg-slate-800/60 text-slate-400 hover:text-white text-xs font-semibold rounded-xl transition-colors text-center cursor-pointer"
+            >
+              ← Return to Storefront
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-['DM_Sans',sans-serif]">
@@ -870,6 +1035,15 @@ export const AdminView: React.FC = () => {
               >
                 <Eye className="w-4 h-4" />
                 <span>View Live Store</span>
+              </button>
+
+              <button
+                onClick={handleAdminLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 transition-colors cursor-pointer"
+                title="Log out from Admin Console"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
               </button>
             </div>
           </div>
