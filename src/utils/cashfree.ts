@@ -68,6 +68,7 @@ export async function createCashfreeOrder(params: {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  paymentMethod?: string;
 }): Promise<{
   success: boolean;
   payment_session_id: string;
@@ -79,22 +80,45 @@ export async function createCashfreeOrder(params: {
   environment?: 'sandbox' | 'production';
   isProd?: boolean;
 }> {
-  let res = await fetch('/api/create-cashfree-order', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  });
+  let data: any = {};
+  let res: Response;
 
-  // Fallback to /api/create-order if /api/create-cashfree-order returned 404
-  if (res.status === 404) {
-    res = await fetch('/api/create-order', {
+  try {
+    res = await fetch('/api/create-cashfree-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
+
+    if (res.ok) {
+      data = await res.json();
+    } else {
+      // If 404, 405, or other failure, try /api/create-order as fallback
+      const fallbackRes = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+
+      if (fallbackRes.ok) {
+        data = await fallbackRes.json();
+        res = fallbackRes;
+      } else {
+        try {
+          data = await fallbackRes.json();
+        } catch {
+          try {
+            data = await res.json();
+          } catch {
+            data = { error: `Payment gateway returned HTTP ${res.status}. Please check Cloudflare Pages functions.` };
+          }
+        }
+      }
+    }
+  } catch (netErr: any) {
+    throw new Error(netErr.message || 'Network error connecting to payment gateway.');
   }
 
-  const data = await res.json();
   const sessionId = data.payment_session_id || data.paymentSessionId;
 
   if (res.ok && sessionId) {
@@ -106,6 +130,10 @@ export async function createCashfreeOrder(params: {
     };
   }
 
-  const errorMessage = data.error || data.message || (data.details && data.details.message) || 'Failed to initialize Cashfree order session';
+  const errorMessage =
+    data.error ||
+    data.message ||
+    (data.details && (data.details.message || data.details.error)) ||
+    `Payment gateway initialization failed (${res.status || 'unknown'})`;
   throw new Error(errorMessage);
 }

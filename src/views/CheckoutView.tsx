@@ -150,6 +150,7 @@ export const CheckoutView: React.FC = () => {
         couponCode: appliedCoupon,
         shippingInfo,
         requestedAmount: total,
+        paymentMethod,
       });
 
       const sessionId = orderData?.payment_session_id || orderData?.paymentSessionId;
