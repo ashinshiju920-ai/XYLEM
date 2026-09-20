@@ -13,6 +13,37 @@ export async function onRequestOptions() {
   });
 }
 
+export async function onRequestGet(context) {
+  const { env } = context;
+  const secretKey = (env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '');
+  const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '');
+  const configuredEnv = (env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '');
+
+  const isProd = secretKey.startsWith('cfsk_ma_prod_') || configuredEnv === 'PRODUCTION';
+
+  return new Response(
+    JSON.stringify({
+      status: 'active',
+      endpoint: '/api/create-order',
+      mode: isProd ? 'production' : 'sandbox',
+      hasSecretKey: Boolean(secretKey),
+      hasAppId: Boolean(appId),
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    }
+  );
+}
+
+export async function onRequest(context) {
+  const method = context.request.method.toUpperCase();
+  if (method === 'OPTIONS') return onRequestOptions();
+  if (method === 'POST') return onRequestPost(context);
+  if (method === 'GET') return onRequestGet(context);
+  return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+}
+
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;

@@ -13,7 +13,7 @@
 // 1. BAD BOTS LIST (Easy to edit & customize)
 // Match against lowercase User-Agent strings.
 // ==============================================================================
-export const BAD_BOTS = [
+const BAD_BOTS = [
   // AI Scrapers & LLM Crawlers
   'gptbot',                // OpenAI web crawler
   'chatgpt-user',          // OpenAI user-prompt web search
@@ -52,7 +52,7 @@ export const BAD_BOTS = [
 // 2. VERIFIED SEARCH ENGINE & SOCIAL PREVIEW ALLOWLIST (SEO Preservation)
 // If any of these match, request is passed through immediately.
 // ==============================================================================
-export const ALLOWED_SEARCH_BOTS = [
+const ALLOWED_SEARCH_BOTS = [
   // Search Engine Crawlers
   'googlebot',             // Google Search indexer
   'bingbot',               // Microsoft Bing indexer
@@ -76,6 +76,12 @@ export const ALLOWED_SEARCH_BOTS = [
 
 export async function onRequest(context) {
   const { request, next } = context;
+
+  const url = new URL(request.url);
+  // Always allow API routes to execute without bot-check interference
+  if (url.pathname.startsWith('/api/')) {
+    return await next();
+  }
 
   const rawUserAgent = request.headers.get('user-agent');
 
