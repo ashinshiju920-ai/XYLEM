@@ -55,22 +55,24 @@ export async function onRequestGet(context) {
     }
 
     // 2. Fetch live products from Cloudinary raw CDN with instant cache-busting:
-    const cloudName = (env && env.CLOUDINARY_CLOUD_NAME) || 'gog1fpsj';
-    const rawUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`;
-    const res = await fetch(rawUrl, { cache: 'no-store' });
+    const cloudName = env?.CLOUDINARY_CLOUD_NAME;
+    if (cloudName) {
+      const rawUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`;
+      const res = await fetch(rawUrl, { cache: 'no-store' });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (checkOnly) {
-        return new Response(JSON.stringify({ success: true, version: data.version || 0, count: data.count || data.books?.length || 0 }), {
+      if (res.ok) {
+        const data = await res.json();
+        if (checkOnly) {
+          return new Response(JSON.stringify({ success: true, version: data.version || 0, count: data.count || data.books?.length || 0 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          });
+        }
+        return new Response(JSON.stringify({ success: true, ...data }), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
         });
       }
-      return new Response(JSON.stringify({ success: true, ...data }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-      });
     }
 
     return new Response(JSON.stringify({ success: false, message: 'No remote catalog initialized yet' }), {
@@ -88,9 +90,19 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
-    const cloudName = (env && env.CLOUDINARY_CLOUD_NAME) || 'gog1fpsj';
-    const apiKey = (env && env.CLOUDINARY_API_KEY) || '493453349916754';
-    const apiSecret = (env && env.CLOUDINARY_API_SECRET) || 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
+    const cloudName = env?.CLOUDINARY_CLOUD_NAME;
+    const apiKey = env?.CLOUDINARY_API_KEY;
+    const apiSecret = env?.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error: Missing Cloudinary credentials in environment' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        }
+      );
+    }
 
     const payload = await request.json();
     let books = payload.books;

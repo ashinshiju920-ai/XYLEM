@@ -67,11 +67,11 @@ export async function onRequestPost(context) {
     }
 
     const secretKey = (env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '');
-    const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '') || 'TEST11209472dd30f3ef7cd2cce52d1f27490211';
+    const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '');
     const configuredEnv = (env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '');
 
-    if (!secretKey) {
-      return new Response(JSON.stringify({ error: "CASHFREE_SECRET_KEY is not configured in Cloudflare Pages environment variables." }), {
+    if (!secretKey || !appId) {
+      return new Response(JSON.stringify({ error: "Server configuration error: CASHFREE_SECRET_KEY or CASHFREE_APP_ID is not configured in Cloudflare environment variables." }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...CORS_HEADERS }
       });

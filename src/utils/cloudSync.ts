@@ -1,15 +1,10 @@
 import { Book, ExamPath, Testimonial } from '../types';
 
-const CLOUDINARY_CLOUD_NAME = 'gog1fpsj';
-const CLOUDINARY_API_KEY = '493453349916754';
-const CLOUDINARY_API_SECRET = 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
-const PUBLIC_CATALOG_ID = 'xylem_products_live';
-
 const CHANNEL_NAME = 'xylem_products_realtime_sync';
 
 /**
- * Uploads an image file directly to Cloudinary via Cloudflare Pages edge /api/upload
- * with automatic client-side Web Crypto fallback for local development.
+ * Uploads an image file securely via Cloudflare Pages edge /api/upload.
+ * Never performs direct browser-to-Cloudinary calls or holds credentials client-side.
  */
 export async function uploadImageToCloudinary(file: File, productId: string): Promise<string> {
   const cleanSku = productId.trim() || 'unassigned';
@@ -17,61 +12,31 @@ export async function uploadImageToCloudinary(file: File, productId: string): Pr
   formData.append('image', file);
   formData.append('productId', cleanSku);
 
-  try {
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.imageUrl) {
-        return data.imageUrl;
-      }
-    }
-  } catch (err) {
-    console.warn('Edge /api/upload unavailable, using direct Cloudinary upload:', err);
+  if (!res.ok) {
+    let errMessage = `Upload failed (status ${res.status})`;
+    try {
+      const errData = await res.json();
+      if (errData?.error) errMessage = errData.error;
+    } catch {}
+    throw new Error(errMessage);
   }
 
-  // Fallback: Direct Web Crypto SHA-1 upload to Cloudinary REST API
-  const timestamp = Math.round(Date.now() / 1000);
-  const folder = 'ecommerce_products';
-  const publicId = `product_${cleanSku}_${timestamp}`;
-  const paramsToSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${CLOUDINARY_API_SECRET}`;
-
-  const encoder = new TextEncoder();
-  const data = encoder.encode(paramsToSign);
-  const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const signature = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-
-  const directData = new FormData();
-  directData.append('file', file);
-  directData.append('api_key', CLOUDINARY_API_KEY);
-  directData.append('timestamp', timestamp.toString());
-  directData.append('folder', folder);
-  directData.append('public_id', publicId);
-  directData.append('signature', signature);
-
-  const directRes = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-    {
-      method: 'POST',
-      body: directData,
-    }
-  );
-
-  const directJson = await directRes.json();
-  if (directRes.ok && directJson.secure_url) {
-    return directJson.secure_url;
+  const data = await res.json();
+  if (data?.success && data?.imageUrl) {
+    return data.imageUrl;
   }
 
-  throw new Error(directJson.error?.message || 'Failed to upload image to Cloudinary');
+  throw new Error(data?.error || 'Failed to upload image: invalid response from server');
 }
 
 /**
- * Saves the entire books catalog to the cloud (Cloudflare Pages KV / Cloudinary Raw CDN)
- * with instant cache invalidation and zero-lag cross-tab broadcast.
+ * Saves the entire books catalog to the cloud via Cloudflare Pages /api/products
+ * with zero-lag cross-tab broadcast. Never signs client-side or calls Cloudinary directly.
  */
 export async function saveCatalogToCloud(
   books: Book[],
@@ -79,19 +44,11 @@ export async function saveCatalogToCloud(
   testimonials?: Testimonial[]
 ): Promise<{ success: boolean; version?: number; error?: string }> {
   const timestamp = Math.round(Date.now() / 1000);
-  const payload: any = {
-    version: timestamp,
-    updatedAt: new Date().toISOString(),
-    count: books.length,
-    books,
-    ...(examPaths ? { examPaths } : {}),
-    ...(testimonials ? { testimonials } : {}),
-  };
 
   // 1. Instant 0ms broadcast to all open tabs & windows on this machine
   broadcastLocalUpdate(books, timestamp, examPaths, testimonials);
 
-  // 2. Try Cloudflare Pages edge endpoint /api/products
+  // 2. Persist via Cloudflare Pages edge endpoint /api/products
   try {
     const res = await fetch('/api/products', {
       method: 'POST',
@@ -101,52 +58,20 @@ export async function saveCatalogToCloud(
 
     if (res.ok) {
       const data = await res.json();
-      if (data.success) {
+      if (data?.success) {
         return { success: true, version: data.version || timestamp };
       }
-    }
-  } catch (err) {
-    console.warn('Edge /api/products failed, falling back to direct Cloudinary sync:', err);
-  }
-
-  // 3. Direct Cloudinary raw upload fallback with instant CDN invalidation
-  try {
-    const paramsToSign = `invalidate=true&overwrite=true&public_id=${PUBLIC_CATALOG_ID}&timestamp=${timestamp}${CLOUDINARY_API_SECRET}`;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(paramsToSign);
-    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const signature = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-
-    const uploadData = new FormData();
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-    uploadData.append('file', blob, 'xylem_products_live.json');
-    uploadData.append('api_key', CLOUDINARY_API_KEY);
-    uploadData.append('timestamp', timestamp.toString());
-    uploadData.append('public_id', PUBLIC_CATALOG_ID);
-    uploadData.append('overwrite', 'true');
-    uploadData.append('invalidate', 'true');
-    uploadData.append('signature', signature);
-
-    const cRes = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`,
-      {
-        method: 'POST',
-        body: uploadData,
-      }
-    );
-
-    const cResult = await cRes.json();
-    if (cRes.ok && cResult.secure_url) {
-      return { success: true, version: timestamp };
+      return { success: false, error: data?.error || 'Failed to sync catalog' };
     }
 
-    return {
-      success: false,
-      error: cResult.error?.message || 'Could not sync catalog to Cloudinary',
-    };
+    let errMsg = `Failed to sync catalog (status ${res.status})`;
+    try {
+      const errData = await res.json();
+      if (errData?.error) errMsg = errData.error;
+    } catch {}
+    return { success: false, error: errMsg };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false, error: err?.message || 'Network error while syncing catalog' };
   }
 }
 
@@ -177,7 +102,7 @@ export async function updateProductImageLive(
     }
   } catch {}
 
-  // Fallback: fetch current, update locally, and push
+  // Fallback: fetch current, update locally, and push via server endpoint
   const current = await fetchCatalogFromCloud();
   if (current && Array.isArray(current.books)) {
     const nextBooks = current.books.map((b) => (b.id === productId ? { ...b, imageUrl } : b));
@@ -208,7 +133,7 @@ export async function checkCatalogVersion(): Promise<number | null> {
 }
 
 /**
- * Fetches the latest live product catalog from Cloudflare Edge or Cloudinary CDN.
+ * Fetches the latest live product catalog from Cloudflare Edge /api/products.
  */
 export async function fetchCatalogFromCloud(): Promise<{
   books: Book[];
@@ -217,7 +142,6 @@ export async function fetchCatalogFromCloud(): Promise<{
   version?: number;
   updatedAt?: string;
 } | null> {
-  // 1. Try Cloudflare Pages /api/products
   try {
     const res = await fetch(`/api/products?_t=${Date.now()}`, {
       cache: 'no-store',
@@ -236,31 +160,8 @@ export async function fetchCatalogFromCloud(): Promise<{
         };
       }
     }
-  } catch {
-    // Continue to Cloudinary fallback
-  }
-
-  // 2. Direct Cloudinary raw CDN fallback with instant cache busting
-  try {
-    const rawUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload/xylem_products_live.json?_t=${Date.now()}`;
-    const cRes = await fetch(rawUrl, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache, no-store' },
-    });
-    if (cRes.ok) {
-      const data = await cRes.json();
-      if (data && Array.isArray(data.books) && data.books.length > 0) {
-        return {
-          books: data.books,
-          examPaths: Array.isArray(data.examPaths) ? data.examPaths : undefined,
-          testimonials: Array.isArray(data.testimonials) ? data.testimonials : undefined,
-          version: data.version,
-          updatedAt: data.updatedAt,
-        };
-      }
-    }
   } catch (err) {
-    console.warn('Failed to fetch catalog from Cloudinary raw CDN:', err);
+    console.warn('Failed to fetch catalog from /api/products:', err);
   }
 
   return null;

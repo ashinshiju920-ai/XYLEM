@@ -15,9 +15,19 @@ export async function onRequestPost(context) {
   try {
     const { request, env } = context;
 
-    const cloudName = (env && env.CLOUDINARY_CLOUD_NAME) || 'gog1fpsj';
-    const apiKey = (env && env.CLOUDINARY_API_KEY) || '493453349916754';
-    const apiSecret = (env && env.CLOUDINARY_API_SECRET) || 'sEAo0K6H8eWpJOacv4Eo_YuaMvw';
+    const cloudName = env?.CLOUDINARY_CLOUD_NAME;
+    const apiKey = env?.CLOUDINARY_API_KEY;
+    const apiSecret = env?.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error: Missing Cloudinary credentials in environment' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        }
+      );
+    }
 
     const formData = await request.formData();
     const file = formData.get('image');

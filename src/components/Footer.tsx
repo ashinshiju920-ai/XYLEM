@@ -9,26 +9,10 @@ export const Footer: React.FC = () => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
-  const ADMIN_SECRET = '8156958052';
-
-  const checkAdminAccess = (value: string) => {
-    if (value.trim() === ADMIN_SECRET) {
-      setEmail('');
-      showToast('Admin Console unlocked', 'success');
-      setCurrentView('admin');
-      return true;
-    }
-    return false;
-  };
-
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
     const val = email.trim();
     if (!val) return;
-
-    if (checkAdminAccess(val)) {
-      return;
-    }
 
     setSubscribed(true);
     showToast('Thank you for subscribing to Xylem Learning updates!');
@@ -193,18 +177,12 @@ export const Footer: React.FC = () => {
             ) : (
               <form onSubmit={handleSubscribe} className="flex items-center">
                 <input
-                  type="text"
+                  type="email"
                   value={email}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEmail(val);
-                    if (val.trim() === ADMIN_SECRET) {
-                      checkAdminAccess(val);
-                    }
-                  }}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email address"
                   required
-                  autoComplete="off"
+                  autoComplete="email"
                   className="w-full text-xs px-3 py-2 bg-slate-900 border border-slate-700 rounded-l-lg text-white placeholder-slate-500 focus:outline-hidden focus:border-emerald-500"
                 />
                 <button
