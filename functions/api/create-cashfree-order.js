@@ -1,3 +1,5 @@
+// functions/api/create-cashfree-order.js
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -15,10 +17,9 @@ export async function onRequestPost(context) {
   try {
     const { request, env } = context;
 
-    // Credentials securely read from environment variables
-    const appId = (env && env.CASHFREE_APP_ID) || 'TEST11209472dd30f3ef7cd2cce52d1f27490211';
-    const secretKey = env && env.CASHFREE_SECRET_KEY;
-    const baseUrl = (env && env.CASHFREE_BASE_URL) || 'https://sandbox.cashfree.com/pg/orders';
+    const secretKey = (env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '');
+    const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '') || 'TEST11209472dd30f3ef7cd2cce52d1f27490211';
+    const configuredEnv = (env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '');
 
     if (!secretKey) {
       return new Response(
@@ -32,6 +33,23 @@ export async function onRequestPost(context) {
       );
     }
 
+    // Auto-detect Production vs Sandbox:
+    // - Secret key starting with 'cfsk_ma_prod_' is 100% PRODUCTION
+    // - Secret key starting with 'cfsk_ma_test_' or App ID starting with 'TEST' is SANDBOX
+    // - Otherwise fall back to CASHFREE_ENV setting
+    let isProd = false;
+    if (secretKey.startsWith('cfsk_ma_prod_')) {
+      isProd = true;
+    } else if (secretKey.startsWith('cfsk_ma_test_') || appId.toUpperCase().startsWith('TEST')) {
+      isProd = false;
+    } else {
+      isProd = (configuredEnv === 'PRODUCTION');
+    }
+
+    const cashfreeUrl = (env && env.CASHFREE_BASE_URL) || (isProd
+      ? 'https://api.cashfree.com/pg/orders'
+      : 'https://sandbox.cashfree.com/pg/orders');
+
     let body = {};
     try {
       body = await request.json();
@@ -44,12 +62,20 @@ export async function onRequestPost(context) {
       couponCode = null,
       shippingInfo = {},
       requestedAmount,
+      productId,
+      productTitle,
+      price,
+      customerName: directCustomerName,
+      customerEmail: directCustomerEmail,
+      customerPhone: directCustomerPhone,
     } = body;
 
     // Server-side price calculation & verification
     let basePrice = 199;
 
-    if (Array.isArray(cart) && cart.length > 0) {
+    if (price !== undefined && Number(price) > 0) {
+      basePrice = Number(price);
+    } else if (Array.isArray(cart) && cart.length > 0) {
       const cartSubtotal = cart.reduce((sum, it) => {
         const itemPrice = Number(it.price) || (it.format === 'physical' ? 899 : 199);
         const qty = Number(it.quantity) || 1;
@@ -87,10 +113,14 @@ export async function onRequestPost(context) {
     const timestamp = Math.round(Date.now() / 1000);
     const orderId = `order_${timestamp}_${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const customerName = (shippingInfo.fullName && shippingInfo.fullName.trim()) || 'Ashin Shiju';
-    const customerEmail = (shippingInfo.email && shippingInfo.email.trim()) || 'ashin.shiju@example.com';
-    const customerPhone = (shippingInfo.phone && shippingInfo.phone.replace(/[^0-9]/g, '')) || '9876543210';
-    const customerId = `cust_${customerPhone.slice(-10) || timestamp}`;
+    const rawName = (shippingInfo && shippingInfo.fullName && shippingInfo.fullName.trim()) || directCustomerName || 'Ashin Shiju';
+    const rawEmail = (shippingInfo && shippingInfo.email && shippingInfo.email.trim()) || directCustomerEmail || 'student@xylemlearning.online';
+    const rawPhone = (shippingInfo && shippingInfo.phone && shippingInfo.phone.replace(/[^0-9]/g, '')) || 
+                     (directCustomerPhone && directCustomerPhone.replace(/[^0-9]/g, '')) || 
+                     '9876543210';
+
+    const customerPhone = rawPhone.length >= 10 ? rawPhone.slice(-10) : '9876543210';
+    const customerId = `cust_${customerPhone}_${timestamp % 10000}`;
 
     const postPaymentRedirectUrl = 'https://portal.xylemlearning.online/';
     const returnUrl = `${postPaymentRedirectUrl}?order_id={order_id}&status={order_status}`;
@@ -101,17 +131,24 @@ export async function onRequestPost(context) {
       order_currency: 'INR',
       customer_details: {
         customer_id: customerId,
-        customer_name: customerName,
-        customer_email: customerEmail,
-        customer_phone: customerPhone.length >= 10 ? customerPhone.slice(-10) : '9876543210',
+        customer_name: rawName || 'Student / Customer',
+        customer_email: rawEmail || 'student@xylemlearning.online',
+        customer_phone: customerPhone,
       },
       order_meta: {
         return_url: returnUrl,
       },
-      order_note: 'Xylem Learning - Complete Prep Study Materials',
+      order_note: productTitle ? `Xylem - ${productTitle.slice(0, 40)}` : 'Xylem Learning - Complete Prep Study Materials',
     };
 
-    const cfResponse = await fetch(baseUrl, {
+    if (productId) {
+      cashfreePayload.order_tags = {
+        product_id: String(productId),
+        product_title: (productTitle || 'Course Material').slice(0, 50),
+      };
+    }
+
+    const cfResponse = await fetch(cashfreeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -125,10 +162,13 @@ export async function onRequestPost(context) {
     const result = await cfResponse.json();
 
     if (!cfResponse.ok || !result.payment_session_id) {
+      console.error('Cashfree order creation error response:', result);
       return new Response(
         JSON.stringify({
           error: result.message || result.error || 'Failed to create Cashfree order',
           details: result,
+          environment: isProd ? 'production' : 'sandbox',
+          targetUrl: cashfreeUrl,
         }),
         {
           status: cfResponse.status || 500,
@@ -140,10 +180,16 @@ export async function onRequestPost(context) {
     return new Response(
       JSON.stringify({
         success: true,
-        order_id: result.order_id,
+        order_id: result.order_id || orderId,
+        orderId: result.order_id || orderId,
         payment_session_id: result.payment_session_id,
-        order_amount: result.order_amount,
-        order_currency: result.order_currency,
+        paymentSessionId: result.payment_session_id,
+        order_amount: result.order_amount || finalAmount,
+        orderAmount: result.order_amount || finalAmount,
+        order_currency: result.order_currency || 'INR',
+        orderCurrency: result.order_currency || 'INR',
+        environment: isProd ? 'production' : 'sandbox',
+        isProd,
       }),
       {
         status: 200,

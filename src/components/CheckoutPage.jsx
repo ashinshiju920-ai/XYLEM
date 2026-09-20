@@ -72,12 +72,8 @@ export default function CheckoutPage({ productsFromAdmin = [] }) {
         throw new Error(data.error || "Unable to initialize payment session.");
       }
 
-      // 2. Initialize Cashfree SDK
-      const cashfreeMode =
-        typeof process !== "undefined" && process.env?.NODE_ENV === "production"
-          ? "production"
-          : "sandbox";
-
+      // 2. Initialize Cashfree SDK with server-matched mode
+      const cashfreeMode = data.environment || (data.isProd ? "production" : "sandbox");
       const cashfree = window.Cashfree ? window.Cashfree({ mode: cashfreeMode }) : null;
 
       if (!cashfree) {

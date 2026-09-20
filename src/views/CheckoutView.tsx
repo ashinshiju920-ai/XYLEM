@@ -141,18 +141,10 @@ export const CheckoutView: React.FC = () => {
 
   const handlePayNow = async () => {
     setIsProcessing(true);
-    setProcessingStatus('Connecting to Cashfree Secure Gateway...');
+    setProcessingStatus('Creating secure Cashfree order session...');
 
     try {
-      // 1. Initialize Cashfree SDK v3 in sandbox mode
-      const cashfree = await loadCashfreeSDK();
-      if (!cashfree) {
-        throw new Error('Cashfree SDK is not available');
-      }
-
-      setProcessingStatus('Creating secure Cashfree order session...');
-
-      // 2. Create Cashfree order session via Cloudflare Pages endpoint
+      // 1. Create Cashfree order session via Cloudflare Pages endpoint
       const orderData = await createCashfreeOrder({
         cart,
         couponCode: appliedCoupon,
@@ -160,44 +152,32 @@ export const CheckoutView: React.FC = () => {
         requestedAmount: total,
       });
 
-      if (!orderData || !orderData.payment_session_id) {
+      const sessionId = orderData?.payment_session_id || orderData?.paymentSessionId;
+      if (!orderData || !sessionId) {
         throw new Error('Failed to generate Cashfree payment session');
       }
 
-      setProcessingStatus('Launching Cashfree Checkout Modal...');
+      // 2. Initialize Cashfree SDK v3 with exact mode matching the session
+      const targetMode: 'sandbox' | 'production' = orderData.environment || (orderData.isProd ? 'production' : 'sandbox');
+      setProcessingStatus(`Connecting to Cashfree Gateway (${targetMode})...`);
 
-      // 3. Trigger Cashfree modal checkout
-      const checkoutResponse = await cashfree.checkout({
-        paymentSessionId: orderData.payment_session_id,
-        redirectTarget: '_modal',
+      const cashfree = await loadCashfreeSDK(targetMode);
+      if (!cashfree) {
+        throw new Error('Cashfree SDK is not available. Please refresh the page.');
+      }
+
+      setProcessingStatus('Redirecting to Cashfree Secure Checkout...');
+
+      // 3. Trigger Cashfree drop-in redirect
+      // Cashfree redirects directly to hosted payment, then to https://portal.xylemlearning.online/ upon completion
+      await cashfree.checkout({
+        paymentSessionId: sessionId,
+        redirectTarget: '_self',
       });
-
-      // 4. Handle checkout result
-      if (checkoutResponse && checkoutResponse.error) {
-        const errorMsg = checkoutResponse.error.message || 'Payment was not completed';
-        if (!errorMsg.toLowerCase().includes('closed')) {
-          throw new Error(errorMsg);
-        }
-        return;
-      }
-
-      // If user completed payment in modal or redirected
-      await placeOrder(paymentMethod);
-      showToast('Payment successful! Your order has been placed.', 'success');
-
-      // Direct customer to Google Sheet copy template link
-      try {
-        window.open(GOOGLE_SHEET_COPY_URL, '_blank');
-      } catch (e) {
-        console.warn('Could not auto-open Google Sheet template:', e);
-      }
     } catch (err: any) {
       console.error('Cashfree checkout error:', err);
       const msg = err.message || 'Payment could not be completed';
-      if (!msg.toLowerCase().includes('closed')) {
-        showToast(msg, 'warning');
-      }
-    } finally {
+      showToast(msg, 'warning');
       setIsProcessing(false);
       setProcessingStatus('');
     }
