@@ -1,9 +1,14 @@
+// functions/api/products.js
+// Cloudflare Pages Function: Products & Catalog Management
+// Hardened with requireAdmin, 1 MB payload cap, and strict field size-capping & schema validation
+
 import { requireAdmin } from '../utils/auth.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS, HEAD',
   'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Pragma, If-None-Match',
+  'Access-Control-Allow-Credentials': 'true',
 };
 
 const NO_CACHE_HEADERS = {
@@ -15,6 +20,99 @@ const NO_CACHE_HEADERS = {
   'Surrogate-Control': 'no-store',
   ...CORS_HEADERS,
 };
+
+const MAX_PAYLOAD_BYTES = 1024 * 1024; // 1 MB limit
+
+function sanitizeString(val, maxLength = 250) {
+  if (typeof val !== 'string') return '';
+  return val.trim().slice(0, maxLength);
+}
+
+function sanitizeNumber(val, min = 0, max = 10000000, fallback = 0) {
+  const num = Number(val);
+  if (isNaN(num)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(num)));
+}
+
+/**
+ * Validates and strictly size-caps each field of a product record.
+ */
+function sanitizeProduct(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const rawId = sanitizeString(raw.id, 64);
+  const cleanId = rawId.replace(/[^a-zA-Z0-9_-]/g, '') || `prod_${Date.now()}`;
+
+  const digitalPrice = sanitizeNumber(raw.prices?.digital?.price, 0, 100000, 199);
+  const digitalOrig = sanitizeNumber(raw.prices?.digital?.originalPrice, digitalPrice, 100000, 599);
+  const physicalPrice = sanitizeNumber(raw.prices?.physical?.price, 0, 100000, 999);
+  const physicalOrig = sanitizeNumber(raw.prices?.physical?.originalPrice, physicalPrice, 100000, 1299);
+
+  const images = Array.isArray(raw.images)
+    ? raw.images.map((img) => sanitizeString(img, 500)).filter(Boolean).slice(0, 8)
+    : (raw.imageUrl ? [sanitizeString(raw.imageUrl, 500)] : []);
+
+  const features = Array.isArray(raw.features)
+    ? raw.features.map((f) => sanitizeString(f, 300)).filter(Boolean).slice(0, 30)
+    : [];
+
+  const whatYouGet = Array.isArray(raw.whatYouGet)
+    ? raw.whatYouGet.map((w) => sanitizeString(w, 300)).filter(Boolean).slice(0, 30)
+    : [];
+
+  const addons = Array.isArray(raw.addons)
+    ? raw.addons.slice(0, 10).map((a) => ({
+        id: sanitizeString(a.id, 64) || 'addon',
+        name: sanitizeString(a.name, 100) || 'Addon',
+        subtitle: sanitizeString(a.subtitle, 150),
+        price: sanitizeNumber(a.price, 0, 100000, 0),
+        originalPrice: sanitizeNumber(a.originalPrice, 0, 100000, 0),
+        deliveryOption: a.deliveryOption === 'physical' ? 'physical' : 'digital',
+      }))
+    : [];
+
+  const reviews = Array.isArray(raw.reviews)
+    ? raw.reviews.slice(0, 100).map((r) => ({
+        id: sanitizeString(r.id, 64) || `rev_${Date.now()}`,
+        author: sanitizeString(r.author, 100) || 'Learner',
+        rating: Math.max(1, Math.min(5, Number(r.rating) || 5)),
+        comment: sanitizeString(r.comment, 2000),
+        date: sanitizeString(r.date, 50) || new Date().toISOString().slice(0, 10),
+        verified: Boolean(r.verified),
+        bandOrScore: sanitizeString(r.bandOrScore, 50),
+      }))
+    : [];
+
+  return {
+    id: cleanId,
+    title: sanitizeString(raw.title, 200) || 'Study Material',
+    subtitle: sanitizeString(raw.subtitle, 300),
+    category: sanitizeString(raw.category, 50) || 'General',
+    type: sanitizeString(raw.type, 50) || 'Study Guides',
+    description: sanitizeString(raw.description, 5000),
+    longDescription: sanitizeString(raw.longDescription, 10000),
+    imageUrl: sanitizeString(raw.imageUrl, 500) || (images[0] || ''),
+    coverImage: sanitizeString(raw.coverImage, 500) || (images[0] || ''),
+    images,
+    badge: sanitizeString(raw.badge, 50),
+    badgeColor: sanitizeString(raw.badgeColor, 30),
+    rating: Math.max(1, Math.min(5, Number(raw.rating) || 4.8)),
+    reviewCount: sanitizeNumber(raw.reviewCount, 0, 1000000, 0),
+    author: sanitizeString(raw.author, 100) || 'Xylem Learning',
+    samplePdfName: sanitizeString(raw.samplePdfName, 100) || 'Official_Prep_Guide.pdf',
+    pdfUrl: sanitizeString(raw.pdfUrl, 500),
+    prices: {
+      digital: { price: digitalPrice, originalPrice: digitalOrig },
+      physical: { price: physicalPrice, originalPrice: physicalOrig },
+    },
+    features,
+    whatYouGet,
+    addons,
+    buy2Get3rdFree: Boolean(raw.buy2Get3rdFree),
+    reviews,
+    order: sanitizeNumber(raw.order, 0, 1000, 0),
+  };
+}
 
 export async function onRequestOptions() {
   return new Response(null, {
@@ -29,7 +127,7 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const checkOnly = url.searchParams.get('check') === 'version';
 
-    // 1. If Cloudflare KV is bound in Pages:
+    // 1. Cloudflare KV retrieval (authoritative storage)
     if (env && env.PRODUCTS_KV) {
       if (checkOnly) {
         const version = await env.PRODUCTS_KV.get('xylem_products_version');
@@ -44,10 +142,17 @@ export async function onRequestGet(context) {
       const data = await env.PRODUCTS_KV.get('xylem_products', { type: 'json' });
       if (data && Array.isArray(data.books)) {
         if (checkOnly) {
-          return new Response(JSON.stringify({ success: true, version: data.version || 0, count: data.count || data.books.length }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              version: data.version || 0,
+              count: data.count || data.books.length,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            }
+          );
         }
         return new Response(JSON.stringify({ success: true, ...data }), {
           status: 200,
@@ -56,7 +161,7 @@ export async function onRequestGet(context) {
       }
     }
 
-    // 2. Fetch live products from Cloudinary raw CDN with instant cache-busting:
+    // 2. Cloudinary raw storage fallback
     const cloudName = env?.CLOUDINARY_CLOUD_NAME;
     if (cloudName) {
       const rawUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`;
@@ -65,10 +170,17 @@ export async function onRequestGet(context) {
       if (res.ok) {
         const data = await res.json();
         if (checkOnly) {
-          return new Response(JSON.stringify({ success: true, version: data.version || 0, count: data.count || data.books?.length || 0 }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              version: data.version || 0,
+              count: data.count || data.books?.length || 0,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            }
+          );
         }
         return new Response(JSON.stringify({ success: true, ...data }), {
           status: 200,
@@ -93,8 +205,33 @@ export async function onRequestPost(context) {
   try {
     const { request, env } = context;
 
+    // 1. Enforce admin authentication
     const authError = await requireAdmin(request, env);
     if (authError) return authError;
+
+    // 2. Reject payloads exceeding 1 MB limit (Rule 4.5)
+    const rawBody = await request.text();
+    if (rawBody.length > MAX_PAYLOAD_BYTES) {
+      return new Response(
+        JSON.stringify({
+          error: `Payload too large. Request body of ${rawBody.length} bytes exceeds 1 MB limit.`,
+        }),
+        {
+          status: 413,
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        }
+      );
+    }
+
+    let payload = {};
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Malformed JSON payload.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS } }
+      );
+    }
 
     const cloudName = env?.CLOUDINARY_CLOUD_NAME;
     const apiKey = env?.CLOUDINARY_API_KEY;
@@ -110,9 +247,6 @@ export async function onRequestPost(context) {
       );
     }
 
-    const payload = await request.json();
-    let books = payload.books;
-
     let currentCatalog = null;
     if (env && env.PRODUCTS_KV) {
       try {
@@ -121,74 +255,97 @@ export async function onRequestPost(context) {
     }
     if (!currentCatalog) {
       try {
-        const cRes = await fetch(`https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`, { cache: 'no-store' });
+        const cRes = await fetch(
+          `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`,
+          { cache: 'no-store' }
+        );
         if (cRes.ok) currentCatalog = await cRes.json();
       } catch {}
     }
 
+    let rawBooks = payload.books;
+
     // Handle single-product image update action directly
     if (payload.action === 'update-product-image' && payload.productId && payload.imageUrl) {
-      const existingBooks = (currentCatalog && Array.isArray(currentCatalog.books)) ? currentCatalog.books : [];
-      const prodId = payload.productId.trim();
-      const idx = existingBooks.findIndex(b => b.id === prodId || (b.title && b.title.toLowerCase().includes(prodId.toLowerCase())));
+      const existingBooks = currentCatalog && Array.isArray(currentCatalog.books) ? currentCatalog.books : [];
+      const prodId = sanitizeString(payload.productId, 64);
+      const cleanImg = sanitizeString(payload.imageUrl, 500);
+
+      const idx = existingBooks.findIndex(
+        (b) => b.id === prodId || (b.title && b.title.toLowerCase().includes(prodId.toLowerCase()))
+      );
 
       if (idx !== -1) {
         const targetBook = existingBooks[idx];
-        const slot = payload.slotIndex !== undefined ? Number(payload.slotIndex) : 0;
-        const currentImages = Array.isArray(targetBook.images) && targetBook.images.length > 0 
-          ? [...targetBook.images] 
+        const slot = Math.max(0, Math.min(3, Number(payload.slotIndex) || 0));
+        const currentImages = Array.isArray(targetBook.images) && targetBook.images.length > 0
+          ? [...targetBook.images]
           : (targetBook.imageUrl ? [targetBook.imageUrl] : []);
-        
-        currentImages[slot] = payload.imageUrl;
+
+        currentImages[slot] = cleanImg;
         const nextImages = currentImages.filter(Boolean).slice(0, 4);
 
-        existingBooks[idx] = { 
-          ...targetBook, 
+        existingBooks[idx] = {
+          ...targetBook,
           images: nextImages,
-          imageUrl: slot === 0 || !targetBook.imageUrl ? payload.imageUrl : targetBook.imageUrl,
+          imageUrl: slot === 0 || !targetBook.imageUrl ? cleanImg : targetBook.imageUrl,
         };
-      } else {
-        existingBooks.push({
-          id: prodId,
-          title: payload.productTitle || prodId,
-          subtitle: 'Official Preparation Guide',
-          category: 'IELTS',
-          type: 'Study Guides',
-          imageUrl: payload.imageUrl,
-          images: [payload.imageUrl],
-          prices: { digital: { price: 199, originalPrice: 599, discountPercent: 67 }, physical: { price: 899, originalPrice: 1499, discountPercent: 40 } },
-          features: ['Official Exam Syllabus 2026', 'Practice Questions & Solutions'],
-          whatYouGet: ['Full Study Material', 'Lifetime Digital Access'],
-          tableOfContents: [{ chapter: 'Chapter 1: Overview', pages: 'pp. 1-50' }],
-        });
       }
-      books = existingBooks;
+      rawBooks = existingBooks;
     }
 
-    if (!Array.isArray(books)) {
-      books = (currentCatalog && Array.isArray(currentCatalog.books)) ? currentCatalog.books : [];
+    if (!Array.isArray(rawBooks)) {
+      rawBooks = currentCatalog && Array.isArray(currentCatalog.books) ? currentCatalog.books : [];
     }
 
-    const examPaths = Array.isArray(payload.examPaths) ? payload.examPaths : currentCatalog?.examPaths;
-    const testimonials = Array.isArray(payload.testimonials) ? payload.testimonials : currentCatalog?.testimonials;
+    // 3. Size-cap and validate every field of each product (Rule 4.5)
+    const sanitizedBooks = rawBooks
+      .slice(0, 200)
+      .map(sanitizeProduct)
+      .filter(Boolean);
+
+    // Sanitize exam paths and testimonials
+    const rawExamPaths = Array.isArray(payload.examPaths) ? payload.examPaths : currentCatalog?.examPaths;
+    const sanitizedExamPaths = Array.isArray(rawExamPaths)
+      ? rawExamPaths.slice(0, 20).map((p) => ({
+          category: sanitizeString(p.category, 50),
+          title: sanitizeString(p.title, 100),
+          description: sanitizeString(p.description, 500),
+          bgImage: sanitizeString(p.bgImage, 500),
+          badgeText: sanitizeString(p.badgeText, 50),
+          scriptWords: Array.isArray(p.scriptWords) ? p.scriptWords.map((s) => sanitizeString(s, 50)).slice(0, 5) : [],
+        }))
+      : undefined;
+
+    const rawTestimonials = Array.isArray(payload.testimonials) ? payload.testimonials : currentCatalog?.testimonials;
+    const sanitizedTestimonials = Array.isArray(rawTestimonials)
+      ? rawTestimonials.slice(0, 50).map((t) => ({
+          id: sanitizeString(t.id, 64),
+          name: sanitizeString(t.name, 100),
+          role: sanitizeString(t.role, 100),
+          avatar: sanitizeString(t.avatar, 500),
+          quote: sanitizeString(t.quote, 1000),
+          rating: Math.max(1, Math.min(5, Number(t.rating) || 5)),
+        }))
+      : undefined;
 
     const timestamp = Math.round(Date.now() / 1000);
     const updatedCatalog = {
       version: timestamp,
       updatedAt: new Date().toISOString(),
-      count: books.length,
-      books,
-      ...(examPaths ? { examPaths } : {}),
-      ...(testimonials ? { testimonials } : {}),
+      count: sanitizedBooks.length,
+      books: sanitizedBooks,
+      ...(sanitizedExamPaths ? { examPaths: sanitizedExamPaths } : {}),
+      ...(sanitizedTestimonials ? { testimonials: sanitizedTestimonials } : {}),
     };
 
-    // 1. If Cloudflare KV is bound:
+    // 4. Save to Cloudflare KV (PRODUCTS_KV)
     if (env && env.PRODUCTS_KV) {
       await env.PRODUCTS_KV.put('xylem_products', JSON.stringify(updatedCatalog));
       await env.PRODUCTS_KV.put('xylem_products_version', String(timestamp));
     }
 
-    // 2. Store to Cloudinary raw storage with instant CDN invalidation
+    // 5. Save to Cloudinary raw storage with instant CDN cache purge
     const publicId = 'xylem_products_live';
     const paramsToSign = `invalidate=true&overwrite=true&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
 

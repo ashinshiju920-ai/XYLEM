@@ -37,6 +37,8 @@ import {
   MessageSquare,
   Lock,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath, ProductAddon } from '../types';
@@ -115,6 +117,42 @@ export const AdminView: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Server-Authoritative Orders (Phase 4.3)
+  const [serverOrders, setServerOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPagination, setOrdersPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }>({ page: 1, limit: 15, total: 0, totalPages: 1 });
+  const [ordersFilterStatus, setOrdersFilterStatus] = useState<string>('all');
+
+  const fetchAdminOrders = React.useCallback(async (page = 1, status = ordersFilterStatus) => {
+    setOrdersLoading(true);
+    try {
+      const statusParam = status !== 'all' ? `&status=${encodeURIComponent(status)}` : '';
+      const res = await fetch(`/api/admin/orders?page=${page}&limit=15${statusParam}`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.orders)) {
+          setServerOrders(data.orders);
+          if (data.pagination) {
+            setOrdersPagination(data.pagination);
+            setOrdersPage(data.pagination.page);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch server orders:', err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [ordersFilterStatus]);
+
   React.useEffect(() => {
     let isMounted = true;
     async function checkAuth() {
@@ -141,6 +179,12 @@ export const AdminView: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    if (isAuthenticated && (activeTab === 'orders' || activeTab === 'overview')) {
+      fetchAdminOrders(ordersPage, ordersFilterStatus);
+    }
+  }, [isAuthenticated, activeTab, ordersPage, ordersFilterStatus, fetchAdminOrders]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,7 +362,10 @@ export const AdminView: React.FC = () => {
   ];
 
   // Overview metrics
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalRevenue =
+    serverOrders.length > 0
+      ? serverOrders.reduce((sum, o) => sum + (Number(o.amount) || Number(o.total) || 0), 0)
+      : orders.reduce((sum, o) => sum + o.total, 0);
   const totalProducts = books.length;
   const totalPdfs = books.filter((b) => b.pdfUrl).length;
   const totalAdLinks = books.filter((b) => b.adLink).length;
@@ -3271,33 +3318,75 @@ export const AdminView: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 5: ORDERS
+            TAB 5: ORDERS (Server-Authoritative with Pagination - Phase 4.3)
             ========================================================================= */}
         {activeTab === 'orders' && (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-200">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
-                  Orders & Transaction Ledger
-                </h3>
-                <p className="text-xs text-slate-500">Live logs of customer payments, receipts, and delivery details</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
+                    Orders & Transaction Ledger
+                  </h3>
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                    Server Authoritative
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Live verified ledger from Cloudflare D1 / KV with Cashfree payment confirmation
+                </p>
               </div>
-              <div className="text-right">
-                <span className="text-xs font-semibold text-slate-400">Total Volume: </span>
-                <span className="text-sm font-extrabold text-emerald-700">₹{totalRevenue}</span>
+
+              {/* Controls: Filter, Refresh, Total Volume */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Status Filter */}
+                <select
+                  value={ordersFilterStatus}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setOrdersFilterStatus(next);
+                    setOrdersPage(1);
+                    fetchAdminOrders(1, next);
+                  }}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="PAID">Paid Only</option>
+                  <option value="PENDING">Pending Only</option>
+                </select>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={() => fetchAdminOrders(ordersPage, ordersFilterStatus)}
+                  disabled={ordersLoading}
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 transition-colors cursor-pointer"
+                  title="Refresh Orders"
+                >
+                  <RefreshCw className={`w-4 h-4 ${ordersLoading ? 'animate-spin text-emerald-600' : ''}`} />
+                </button>
+
+                <div className="text-right pl-2 border-l border-slate-200">
+                  <span className="text-xs font-semibold text-slate-400">Volume: </span>
+                  <span className="text-sm font-extrabold text-emerald-700">₹{totalRevenue}</span>
+                </div>
               </div>
             </div>
 
-            {orders.length === 0 ? (
+            {ordersLoading && serverOrders.length === 0 ? (
+              <div className="text-center py-20 px-4">
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-2" />
+                <p className="text-xs font-medium text-slate-500">Loading orders from server...</p>
+              </div>
+            ) : (serverOrders.length === 0 && orders.length === 0) ? (
               <div className="text-center py-16 px-4">
                 <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h4 className="text-sm font-bold text-slate-700">No Orders in History</h4>
+                <h4 className="text-sm font-bold text-slate-700">No Orders Found</h4>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                   When customers purchase IELTS, OET, PTE, or German study materials, orders are logged here with shipping and payment receipts.
                 </p>
                 <button
                   onClick={() => setCurrentView('home')}
-                  className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-emerald-500 transition-colors"
+                  className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-emerald-500 transition-colors cursor-pointer"
                 >
                   Visit Store & Place a Test Order
                 </button>
@@ -3312,68 +3401,135 @@ export const AdminView: React.FC = () => {
                       <th className="px-6 py-3.5">Items Purchased</th>
                       <th className="px-6 py-3.5">Amount</th>
                       <th className="px-6 py-3.5">Payment Method</th>
-                      <th className="px-6 py-3.5">Delivery Status</th>
+                      <th className="px-6 py-3.5">Payment Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {orders.map((order) => (
-                      <tr key={order.id} className="hover:bg-slate-50/70">
-                        <td className="px-6 py-4">
-                          <p className="font-mono font-bold text-slate-900">{order.id}</p>
-                          <p className="text-[10px] text-slate-400">{order.date}</p>
-                          <p className="text-[9px] font-mono text-slate-400 truncate max-w-[120px]">
-                            {order.paymentId}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-bold text-slate-900">{order.shipping.fullName}</p>
-                          <p className="text-[11px] text-slate-500">{order.shipping.phone}</p>
-                          <p className="text-[10px] text-slate-400">{order.shipping.email}</p>
-                          {order.shipping.addressLine1 && (
-                            <p className="text-[10px] text-slate-400 truncate max-w-xs mt-0.5">
-                              {order.shipping.addressLine1}, {order.shipping.city}, {order.shipping.state}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 space-y-1">
-                          {order.items.map((it, idx) => (
-                            <div key={idx} className="flex items-center gap-2">
-                              <span
-                                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                                  it.format === 'digital' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
-                                }`}
-                              >
-                                {it.format}
+                    {(serverOrders.length > 0 ? serverOrders : orders).map((order: any) => {
+                      const orderId = order.id || order.cf_order_id;
+                      const rawDate = order.created_at || order.createdAt || order.date;
+                      const orderDate = rawDate
+                        ? (rawDate.includes('T') ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : rawDate)
+                        : 'Recent';
+                      const customerName = order.customer_name || order.customer?.name || order.shipping?.fullName || 'Student';
+                      const customerPhone = order.customer_phone || order.customer?.phone || order.shipping?.phone || '—';
+                      const customerEmail = order.customer_email || order.customer?.email || order.shipping?.email || '—';
+                      const addressLine = order.shipping?.address || order.shipping?.addressLine1 || '';
+                      const cityState = [order.shipping?.city, order.shipping?.state].filter(Boolean).join(', ');
+                      const orderAmount = order.amount ?? order.total ?? Math.round((Number(order.amount_paise) || 0) / 100);
+                      const orderItems: any[] = Array.isArray(order.items) ? order.items : [];
+                      const orderStatus = String(order.status || 'PENDING').toUpperCase();
+
+                      return (
+                        <tr key={orderId} className="hover:bg-slate-50/70">
+                          <td className="px-6 py-4">
+                            <p className="font-mono font-bold text-slate-900">{orderId}</p>
+                            <p className="text-[10px] text-slate-400">{orderDate}</p>
+                            {order.cf_order_id && order.cf_order_id !== orderId && (
+                              <p className="text-[9px] font-mono text-slate-400 truncate max-w-[120px]">
+                                CF: {order.cf_order_id}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-slate-900">{customerName}</p>
+                            <p className="text-[11px] text-slate-500">{customerPhone}</p>
+                            <p className="text-[10px] text-slate-400">{customerEmail}</p>
+                            {(addressLine || cityState) && (
+                              <p className="text-[10px] text-slate-400 truncate max-w-xs mt-0.5">
+                                {[addressLine, cityState].filter(Boolean).join(' • ')}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 space-y-1">
+                            {orderItems.map((it: any, idx: number) => {
+                              const format = it.format || 'digital';
+                              const title = it.title || it.book?.title || 'Exam Study Guide';
+                              const qty = it.quantity || 1;
+                              return (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <span
+                                    className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                      format === 'digital' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                                    }`}
+                                  >
+                                    {format}
+                                  </span>
+                                  <span className="font-medium text-slate-800 truncate max-w-xs">
+                                    {title} (x{qty})
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-extrabold text-slate-900 text-sm">₹{orderAmount}</p>
+                            {order.discount > 0 && (
+                              <p className="text-[10px] text-emerald-600 font-semibold">
+                                Saved ₹{order.discount}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="uppercase text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">
+                              {order.paymentMethod || 'Cashfree PG v3'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {orderStatus === 'PAID' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-3 h-3" />
+                                PAID
                               </span>
-                              <span className="font-medium text-slate-800 truncate max-w-xs">
-                                {it.book.title} (x{it.quantity})
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                <AlertCircle className="w-3 h-3" />
+                                {orderStatus}
                               </span>
-                            </div>
-                          ))}
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-extrabold text-slate-900 text-sm">₹{order.total}</p>
-                          {order.discount > 0 && (
-                            <p className="text-[10px] text-emerald-600 font-semibold">
-                              Saved ₹{order.discount}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="uppercase text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">
-                            {order.paymentMethod}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            <CheckCircle2 className="w-3 h-3" />
-                            {order.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+
+                {/* Pagination Controls */}
+                {ordersPagination.totalPages > 1 && (
+                  <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
+                    <div>
+                      Showing Page <strong className="text-slate-900">{ordersPagination.page}</strong> of{' '}
+                      <strong className="text-slate-900">{ordersPagination.totalPages}</strong> (
+                      {ordersPagination.total} Total Orders)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const prev = Math.max(1, ordersPage - 1);
+                          setOrdersPage(prev);
+                          fetchAdminOrders(prev, ordersFilterStatus);
+                        }}
+                        disabled={ordersPage <= 1 || ordersLoading}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => {
+                          const next = Math.min(ordersPagination.totalPages, ordersPage + 1);
+                          setOrdersPage(next);
+                          fetchAdminOrders(next, ordersFilterStatus);
+                        }}
+                        disabled={ordersPage >= ordersPagination.totalPages || ordersLoading}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        Next
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

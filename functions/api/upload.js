@@ -1,10 +1,61 @@
+// functions/api/upload.js
+// Cloudflare Pages Function: Cloudinary Image Upload
+// Hardened with requireAdmin, 5 MB limit, binary magic bytes validation, and server-side filename generation
+
 import { requireAdmin } from '../utils/auth.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Credentials': 'true',
 };
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Validates genuine image binary magic bytes.
+ * Never trusts client-declared MIME type or filename extension.
+ */
+function verifyImageMagicBytes(buffer) {
+  if (!buffer || buffer.byteLength < 12) return null;
+  const bytes = new Uint8Array(buffer.slice(0, 12));
+
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  // WEBP: 'RIFF' .... 'WEBP'
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
 
 export async function onRequestOptions() {
   return new Response(null, {
@@ -17,12 +68,14 @@ export async function onRequestPost(context) {
   try {
     const { request, env } = context;
 
+    // 1. Enforce admin authentication
     const authError = await requireAdmin(request, env);
     if (authError) return authError;
 
-    const cloudName = env?.CLOUDINARY_CLOUD_NAME;
-    const apiKey = env?.CLOUDINARY_API_KEY;
-    const apiSecret = env?.CLOUDINARY_API_SECRET;
+    // 2. Read Cloudinary credentials (Rule 2: throw 500 if missing, never fall back to literal)
+    const cloudName = env && env.CLOUDINARY_CLOUD_NAME ? String(env.CLOUDINARY_CLOUD_NAME).trim() : '';
+    const apiKey = env && env.CLOUDINARY_API_KEY ? String(env.CLOUDINARY_API_KEY).trim() : '';
+    const apiSecret = env && env.CLOUDINARY_API_SECRET ? String(env.CLOUDINARY_API_SECRET).trim() : '';
 
     if (!cloudName || !apiKey || !apiSecret) {
       return new Response(
@@ -38,18 +91,57 @@ export async function onRequestPost(context) {
     const file = formData.get('image');
     const productId = formData.get('productId') || 'unassigned';
 
-    if (!file) {
-      return new Response(JSON.stringify({ error: 'No image file provided' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
+    if (!file || typeof file.arrayBuffer !== 'function') {
+      return new Response(
+        JSON.stringify({ error: 'No image file provided in request.' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        }
+      );
+    }
+
+    // 3. Enforce maximum file size: 5 MB
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return new Response(
+        JSON.stringify({ error: 'File size exceeds maximum permitted limit of 5 MB.' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        }
+      );
+    }
+
+    // 4. Verify authentic binary magic bytes (only JPEG, PNG, WebP)
+    const arrayBuffer = await file.arrayBuffer();
+    const verifiedMime = verifyImageMagicBytes(arrayBuffer);
+
+    if (!verifiedMime) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid file format. Upload rejected: only genuine JPEG, PNG, and WebP images are allowed.',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        }
+      );
     }
 
     const timestamp = Math.round(new Date().getTime() / 1000);
     const folder = 'ecommerce_products';
 
+    // 5. Generate filename strictly server-side (never trust client filename)
+    const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const cleanProductId = String(productId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'item';
+    const serverPublicId = `product_${cleanProductId}_${timestamp}_${randomHex}`;
+    const extension = verifiedMime.split('/')[1] === 'jpeg' ? 'jpg' : verifiedMime.split('/')[1];
+    const serverFilename = `${serverPublicId}.${extension}`;
+
     // Cloudinary signature generation (SHA-1 over alphabetical key=value pairs)
-    const paramsToSign = `folder=${folder}&public_id=product_${productId}_${timestamp}&timestamp=${timestamp}${apiSecret}`;
+    const paramsToSign = `folder=${folder}&public_id=${serverPublicId}&timestamp=${timestamp}${apiSecret}`;
     
     // Web Crypto SHA-1 hash
     const encoder = new TextEncoder();
@@ -60,11 +152,11 @@ export async function onRequestPost(context) {
 
     // Prepare payload for Cloudinary REST API
     const uploadData = new FormData();
-    uploadData.append('file', file);
+    uploadData.append('file', new Blob([arrayBuffer], { type: verifiedMime }), serverFilename);
     uploadData.append('api_key', apiKey);
     uploadData.append('timestamp', timestamp.toString());
     uploadData.append('folder', folder);
-    uploadData.append('public_id', `product_${productId}_${timestamp}`);
+    uploadData.append('public_id', serverPublicId);
     uploadData.append('signature', signature);
 
     // Direct upload call from Cloudflare Edge to Cloudinary
@@ -79,7 +171,7 @@ export async function onRequestPost(context) {
     const result = await cloudinaryResponse.json();
 
     if (!cloudinaryResponse.ok) {
-      return new Response(JSON.stringify({ error: result.error?.message || 'Upload failed' }), {
+      return new Response(JSON.stringify({ error: result.error?.message || 'Cloudinary upload failed.' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
@@ -90,7 +182,9 @@ export async function onRequestPost(context) {
         success: true,
         imageUrl: result.secure_url,
         publicId: result.public_id,
-        productId: productId,
+        productId: cleanProductId,
+        mimeType: verifiedMime,
+        sizeBytes: arrayBuffer.byteLength,
       }),
       {
         status: 200,
@@ -98,7 +192,7 @@ export async function onRequestPost(context) {
       }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: err.message || 'Internal server error during upload.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
