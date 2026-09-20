@@ -92,9 +92,8 @@ export async function onRequestPost(context) {
     const customerPhone = (shippingInfo.phone && shippingInfo.phone.replace(/[^0-9]/g, '')) || '9876543210';
     const customerId = `cust_${customerPhone.slice(-10) || timestamp}`;
 
-    const urlObj = new URL(request.url);
-    const origin = urlObj.origin || 'http://localhost:3000';
-    const returnUrl = `${origin}/?order_id={order_id}&cf_status=success`;
+    const postPaymentRedirectUrl = 'https://portal.xylemlearning.online/';
+    const returnUrl = `${postPaymentRedirectUrl}?order_id={order_id}&status={order_status}`;
 
     const cashfreePayload = {
       order_id: orderId,
