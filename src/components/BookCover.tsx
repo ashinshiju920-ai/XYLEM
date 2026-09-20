@@ -160,7 +160,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
 
         {book.imageUrl || book.coverImage ? (
           <>
-            {/* Custom Uploaded Cloudinary / Product Image */}
+            {/* Custom Uploaded / Product Image */}
             <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-slate-900">
               <img
                 src={book.imageUrl || book.coverImage}

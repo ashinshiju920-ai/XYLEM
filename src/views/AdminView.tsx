@@ -39,7 +39,7 @@ import {
 import { useShop } from '../context/ShopContext';
 import { Book, ExamCategory, BookFormat, Testimonial, Review, ExamPath, ProductAddon } from '../types';
 import { BookCover } from '../components/BookCover';
-import { uploadImageToCloudinary } from '../utils/cloudSync';
+import { uploadImageToCloud } from '../utils/cloudSync';
 import { getBookAddons } from '../utils/pricing';
 
 const EXAM_IMAGE_PRESETS: { [key in ExamCategory]?: { label: string; url: string }[] } = {
@@ -340,18 +340,18 @@ export const AdminView: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
-  // Handle Uploading Product Image (Slot 0-3) via Cloudflare Edge / Cloudinary & Real-Time Sync
+  // Handle Uploading Product Image (Slot 0-3) via Cloudflare Edge / Cloud Storage & Real-Time Sync
   const handleUploadSlotImage = async (file: File, slotIndex: number) => {
     if (!file) return;
 
     setActiveSlotUploading(slotIndex);
     setIsUploadingImage(true);
-    setUploadStatus({ type: 'uploading', message: `Uploading Image (Slot ${slotIndex + 1}) to Cloudinary...` });
+    setUploadStatus({ type: 'uploading', message: `Uploading Image (Slot ${slotIndex + 1}) to Cloud Storage...` });
 
     const sku = productSkuInput.trim() || editingBookId || `PROD-${Date.now()}`;
 
     try {
-      const uploadedUrl = await uploadImageToCloudinary(file, `${sku}_slot${slotIndex + 1}`);
+      const uploadedUrl = await uploadImageToCloud(file, `${sku}_slot${slotIndex + 1}`);
       const currentImages = [...(bookFormData.images || [])];
       currentImages[slotIndex] = uploadedUrl;
       const nextImages = currentImages.filter(Boolean).slice(0, 4);
@@ -363,7 +363,7 @@ export const AdminView: React.FC = () => {
         imageUrl: nextCover,
       }));
 
-      setUploadStatus({ type: 'success', message: `Slot ${slotIndex + 1} image uploaded to Cloudinary!` });
+      setUploadStatus({ type: 'success', message: `Slot ${slotIndex + 1} image uploaded to Cloud Storage!` });
       showToast(`Image ${slotIndex + 1} uploaded & saved!`, 'success');
 
       // If currently editing an existing product, immediately sync image change live to all users!
@@ -689,12 +689,12 @@ export const AdminView: React.FC = () => {
   const handleExamPathImageUpload = async (cat: ExamCategory, file: File) => {
     setUploadingCategory(cat);
     try {
-      showToast(`Uploading ${cat} background to Cloudinary...`, 'info');
-      const uploadedUrl = await uploadImageToCloudinary(file, `exam_${cat.toLowerCase()}`);
+      showToast(`Uploading ${cat} background to Cloud Storage...`, 'info');
+      const uploadedUrl = await uploadImageToCloud(file, `exam_${cat.toLowerCase()}`);
       updateExamPath(cat, { bgImage: uploadedUrl });
       showToast(`${cat} background image uploaded & synced in real-time!`, 'success');
     } catch (err: any) {
-      console.warn('Cloudinary upload error, using direct FileReader fallback:', err);
+      console.warn('Image upload error, using direct FileReader fallback:', err);
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
@@ -712,12 +712,12 @@ export const AdminView: React.FC = () => {
   const handleTestimonialAvatarUpload = async (testiId: string, file: File) => {
     setUploadingTestimonialId(testiId);
     try {
-      showToast('Uploading student photo to Cloudinary...', 'info');
-      const uploadedUrl = await uploadImageToCloudinary(file, `student_${testiId}`);
+      showToast('Uploading student photo to Cloud Storage...', 'info');
+      const uploadedUrl = await uploadImageToCloud(file, `student_${testiId}`);
       updateTestimonial(testiId, { avatar: uploadedUrl });
       showToast('Student avatar updated & synced in real-time!', 'success');
     } catch (err: any) {
-      console.warn('Cloudinary upload error, using direct FileReader fallback:', err);
+      console.warn('Image upload error, using direct FileReader fallback:', err);
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
@@ -1130,7 +1130,7 @@ export const AdminView: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <h5 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] flex items-center gap-1.5 text-white">
                       <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                      <span>Cloudinary Live Real-Time Sync</span>
+                      <span>Cloud Storage Live Real-Time Sync</span>
                     </h5>
                     <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                       Live to all users
@@ -1153,7 +1153,7 @@ export const AdminView: React.FC = () => {
                   onClick={() => refreshProductsFromCloud()}
                   disabled={isCloudSyncing}
                   className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white border border-white/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                  title="Check Cloudinary for remote catalog updates"
+                  title="Check Cloud Storage for remote catalog updates"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-spin' : ''}`} />
                   <span>{isCloudSyncing ? 'Syncing...' : 'Sync with Cloud'}</span>
@@ -1226,7 +1226,7 @@ export const AdminView: React.FC = () => {
                       {book.imageUrl && (
                         <span
                           className="p-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold flex items-center gap-1"
-                          title="Cloudinary Product Image"
+                          title="Cloud Product Image"
                         >
                           <ImageIcon className="w-3 h-3" /> Image
                         </span>
@@ -1758,7 +1758,7 @@ export const AdminView: React.FC = () => {
                   Homepage Images &amp; Content Customizer
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                  Directly customize the 4 Primary Exam Category Cards (IELTS, OET, PTE, German) and Student Testimonial Photos. Changes are published instantly to all visitors via Cloudflare Edge KV and Cloudinary CDN.
+                  Directly customize the 4 Primary Exam Category Cards (IELTS, OET, PTE, German) and Student Testimonial Photos. Changes are published instantly to all visitors via Cloudflare Edge KV and Cloud CDN.
                 </p>
               </div>
 
@@ -2315,7 +2315,7 @@ export const AdminView: React.FC = () => {
                             onChange={async (e) => {
                               if (e.target.files && e.target.files[0]) {
                                 try {
-                                  const url = await uploadImageToCloudinary(e.target.files[0], 'new_testi');
+                                  const url = await uploadImageToCloud(e.target.files[0], 'new_testi');
                                   setNewTestiAvatar(url);
                                 } catch {
                                   const reader = new FileReader();
@@ -3232,7 +3232,7 @@ export const AdminView: React.FC = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSaveBook} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* SECTION 1: PRODUCT IMAGES (UP TO 4 IMAGES • CLOUDINARY LIVE SYNC) */}
+              {/* SECTION 1: PRODUCT IMAGES (UP TO 4 IMAGES • CLOUD STORAGE LIVE SYNC) */}
               <div className="space-y-4 p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0a2540] to-slate-950 text-white border border-slate-700/60 shadow-md">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
                   <div className="flex items-center gap-2">
@@ -3243,7 +3243,7 @@ export const AdminView: React.FC = () => {
                       <h4 className="text-xs font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white flex items-center gap-2">
                         <span>1. Product Images Gallery (Up to 4 Images)</span>
                         <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
-                          Cloudinary CDN
+                          Cloud CDN
                         </span>
                       </h4>
                       <p className="text-[10px] text-slate-300 mt-0.5">
@@ -3260,7 +3260,7 @@ export const AdminView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* SKU Config for Cloudinary Naming */}
+                {/* SKU Config for Cloud Storage Naming */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-800/60 p-3 rounded-xl border border-slate-700">
                   <div className="flex items-center gap-2">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
@@ -3275,7 +3275,7 @@ export const AdminView: React.FC = () => {
                     />
                   </div>
                   <span className="text-[10px] text-slate-400">
-                    Images are saved on Cloudinary under this SKU
+                    Images are saved in Cloud Storage under this SKU
                   </span>
                 </div>
 

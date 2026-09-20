@@ -4,9 +4,9 @@ const CHANNEL_NAME = 'xylem_products_realtime_sync';
 
 /**
  * Uploads an image file securely via Cloudflare Pages edge /api/upload.
- * Never performs direct browser-to-Cloudinary calls or holds credentials client-side.
+ * Never performs direct browser-to-cloud-storage calls or holds credentials client-side.
  */
-export async function uploadImageToCloudinary(file: File, productId: string): Promise<string> {
+export async function uploadImageToCloud(file: File, productId: string): Promise<string> {
   const cleanSku = productId.trim() || 'unassigned';
   const formData = new FormData();
   formData.append('image', file);
@@ -36,7 +36,7 @@ export async function uploadImageToCloudinary(file: File, productId: string): Pr
 
 /**
  * Saves the entire books catalog to the cloud via Cloudflare Pages /api/products
- * with zero-lag cross-tab broadcast. Never signs client-side or calls Cloudinary directly.
+ * with zero-lag cross-tab broadcast. Never signs client-side or calls remote storage directly.
  */
 export async function saveCatalogToCloud(
   books: Book[],
