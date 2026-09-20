@@ -1,4 +1,8 @@
 // functions/api/create-cashfree-order.js
+// Server-Authoritative Cashfree Order Creation Endpoint
+
+import { computeOrderPrice, validateShippingInfo } from '../utils/pricing.js';
+import { saveOrder } from '../utils/db.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,9 +19,9 @@ export async function onRequestOptions() {
 
 export async function onRequestGet(context) {
   const { env } = context;
-  const secretKey = (env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '');
-  const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '');
-  const configuredEnv = (env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '');
+  const secretKey = env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '';
+  const appId = env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '';
+  const configuredEnv = env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '';
 
   const isProd = secretKey.startsWith('cfsk_ma_prod_') || configuredEnv === 'PRODUCTION';
 
@@ -48,136 +52,172 @@ export async function onRequestPost(context) {
   try {
     const { request, env } = context;
 
-    const secretKey = (env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '');
-    const appId = (env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '');
-    const configuredEnv = (env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '');
-
-    if (!secretKey || !appId) {
-      return new Response(
-        JSON.stringify({
-          error: 'Server configuration error: CASHFREE_SECRET_KEY or CASHFREE_APP_ID is not configured in Cloudflare environment variables.',
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-        }
-      );
-    }
-
-    // Auto-detect Production vs Sandbox:
-    // - Secret key starting with 'cfsk_ma_prod_' is 100% PRODUCTION
-    // - Secret key starting with 'cfsk_ma_test_' or App ID starting with 'TEST' is SANDBOX
-    // - Otherwise fall back to CASHFREE_ENV setting
-    let isProd = false;
-    if (secretKey.startsWith('cfsk_ma_prod_')) {
-      isProd = true;
-    } else if (secretKey.startsWith('cfsk_ma_test_') || appId.toUpperCase().startsWith('TEST')) {
-      isProd = false;
-    } else {
-      isProd = (configuredEnv === 'PRODUCTION');
-    }
-
-    const cashfreeUrl = (env && env.CASHFREE_BASE_URL) || (isProd
-      ? 'https://api.cashfree.com/pg/orders'
-      : 'https://sandbox.cashfree.com/pg/orders');
-
     let body = {};
     try {
       body = await request.json();
     } catch {
-      body = {};
+      return new Response(
+        JSON.stringify({ error: 'Malformed JSON payload.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
+    }
+
+    // NON-NEGOTIABLE RULE 3: Reject any request attempting to send prices, amounts, or totals.
+    const forbiddenKeys = [
+      'requestedAmount',
+      'price',
+      'total',
+      'amount',
+      'orderAmount',
+      'order_amount',
+      'discount',
+      'couponDiscount',
+      'subtotal',
+    ];
+
+    for (const key of forbiddenKeys) {
+      if (key in body) {
+        return new Response(
+          JSON.stringify({
+            error: `Price tampering detected: browser may never provide '${key}'. Server is authoritative.`,
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        );
+      }
+    }
+
+    if (Array.isArray(body.cart)) {
+      for (const item of body.cart) {
+        if (!item || typeof item !== 'object') continue;
+        for (const key of forbiddenKeys) {
+          if (key in item) {
+            return new Response(
+              JSON.stringify({
+                error: `Price tampering detected: cart item contains forbidden key '${key}'.`,
+              }),
+              { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+            );
+          }
+        }
+      }
     }
 
     const {
       cart = [],
       couponCode = null,
       shippingInfo = {},
-      requestedAmount,
-      productId,
-      productTitle,
-      price,
-      customerName: directCustomerName,
-      customerEmail: directCustomerEmail,
-      customerPhone: directCustomerPhone,
+      deliveryOption = 'digital',
     } = body;
 
-    // Server-side price calculation & verification
-    let basePrice = 199;
-
-    if (price !== undefined && Number(price) > 0) {
-      basePrice = Number(price);
-    } else if (Array.isArray(cart) && cart.length > 0) {
-      const cartSubtotal = cart.reduce((sum, it) => {
-        const itemPrice = Number(it.price) || (it.format === 'physical' ? 899 : 199);
-        const qty = Number(it.quantity) || 1;
-        return sum + itemPrice * qty;
-      }, 0);
-      if (cartSubtotal > 0) {
-        basePrice = cartSubtotal;
-      }
-    } else if (typeof requestedAmount === 'number' && requestedAmount > 0) {
-      basePrice = requestedAmount;
+    if (!Array.isArray(cart) || cart.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Cart cannot be empty.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
     }
 
-    // Physical delivery fee (₹99 for physical shipping)
-    const hasPhysical = Array.isArray(cart) && cart.some((it) => it.format === 'physical');
-    const deliveryFee = hasPhysical && shippingInfo.deliveryOption === 'physical' ? 99 : 0;
+    // Check credentials (Rule 2: No hardcoded fallback secrets)
+    const secretKey = env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '';
+    const appId = env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '';
+    const configuredEnv = env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '';
 
-    // Apply coupon discount server-side if provided
-    let discount = 0;
-    if (couponCode) {
-      const code = String(couponCode).trim().toUpperCase();
-      if (code === 'XYLEM20') {
-        discount = Math.round(basePrice * 0.20);
-      } else if (code === 'FIRST50') {
-        discount = Math.min(50, basePrice - 1);
-      } else if (code === 'SPECIALOFFER' || code === 'OFFER67') {
-        discount = Math.round(basePrice * 0.15);
-      }
+    if (!secretKey || !appId) {
+      return new Response(
+        JSON.stringify({
+          error: 'Server configuration error: CASHFREE_SECRET_KEY or CASHFREE_APP_ID is not configured in Cloudflare environment variables.',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
     }
 
-    let finalAmount = Math.max(1, Math.round(basePrice + deliveryFee - discount));
-    if (typeof requestedAmount === 'number' && requestedAmount > 0 && Math.abs(requestedAmount - finalAmount) <= 5) {
-      finalAmount = requestedAmount;
+    // 1. Authoritative price calculation from KV catalogue
+    let pricing;
+    try {
+      pricing = await computeOrderPrice(
+        {
+          cart,
+          couponCode,
+          deliveryOption,
+        },
+        env
+      );
+    } catch (pricingErr) {
+      return new Response(
+        JSON.stringify({ error: pricingErr.message || 'Pricing computation failed.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
     }
 
+    // 2. Validate customer & shipping details
+    const shippingValidation = validateShippingInfo(shippingInfo, pricing.hasPhysical);
+    if (!shippingValidation.isValid) {
+      return new Response(
+        JSON.stringify({
+          error: `Shipping validation failed: ${shippingValidation.errors.join(' ')}`,
+          errors: shippingValidation.errors,
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      );
+    }
+
+    const cleanShipping = shippingValidation.clean;
+
+    // Auto-detect Production vs Sandbox
+    let isProd = false;
+    if (secretKey.startsWith('cfsk_ma_prod_')) {
+      isProd = true;
+    } else if (secretKey.startsWith('cfsk_ma_test_') || appId.toUpperCase().startsWith('TEST')) {
+      isProd = false;
+    } else {
+      isProd = configuredEnv === 'PRODUCTION';
+    }
+
+    const cashfreeUrl = (env && env.CASHFREE_BASE_URL) || (isProd
+      ? 'https://api.cashfree.com/pg/orders'
+      : 'https://sandbox.cashfree.com/pg/orders');
+
+    // Generate unique order ID
     const timestamp = Math.round(Date.now() / 1000);
     const orderId = `order_${timestamp}_${Math.floor(1000 + Math.random() * 9000)}`;
+    const customerId = `cust_${cleanShipping.phone}_${timestamp % 10000}`;
 
-    const rawName = (shippingInfo && shippingInfo.fullName && shippingInfo.fullName.trim()) || directCustomerName || 'Ashin Shiju';
-    const rawEmail = (shippingInfo && shippingInfo.email && shippingInfo.email.trim()) || directCustomerEmail || 'student@xylemlearning.online';
-    const rawPhone = (shippingInfo && shippingInfo.phone && shippingInfo.phone.replace(/[^0-9]/g, '')) || 
-                     (directCustomerPhone && directCustomerPhone.replace(/[^0-9]/g, '')) || 
-                     '9876543210';
+    // 3. Write PENDING order row to D1 / KV BEFORE calling Cashfree
+    await saveOrder(env, {
+      id: orderId,
+      cf_order_id: orderId,
+      amount_paise: pricing.totalPaise,
+      currency: 'INR',
+      status: 'PENDING',
+      customer_name: cleanShipping.fullName,
+      customer_email: cleanShipping.email,
+      customer_phone: cleanShipping.phone,
+      shipping: cleanShipping,
+      items: pricing.items,
+    });
 
-    const customerPhone = rawPhone.length >= 10 ? rawPhone.slice(-10) : '9876543210';
-    const customerId = `cust_${customerPhone}_${timestamp % 10000}`;
-
-    const postPaymentRedirectUrl = 'https://portal.xylemlearning.online/';
-    const returnUrl = `${postPaymentRedirectUrl}?order_id={order_id}&status={order_status}`;
+    // Build return URL
+    const requestOrigin = new URL(request.url).origin;
+    const returnUrl = `${requestOrigin}/?order_id={order_id}&cf_status={order_status}`;
 
     const cashfreePayload = {
       order_id: orderId,
-      order_amount: finalAmount,
+      order_amount: pricing.total,
       order_currency: 'INR',
       customer_details: {
         customer_id: customerId,
-        customer_name: rawName || 'Student / Customer',
-        customer_email: rawEmail || 'student@xylemlearning.online',
-        customer_phone: customerPhone,
+        customer_name: cleanShipping.fullName,
+        customer_email: cleanShipping.email,
+        customer_phone: cleanShipping.phone,
       },
       order_meta: {
         return_url: returnUrl,
       },
-      order_note: productTitle ? `Xylem - ${productTitle.slice(0, 40)}` : 'Xylem Learning - Complete Prep Study Materials',
+      order_note: `Xylem Learning - ${pricing.items[0]?.title ? pricing.items[0].title.slice(0, 35) : 'Exam Study Guide'}`,
+      order_tags: {
+        product_count: String(pricing.items.length),
+        delivery_option: cleanShipping.deliveryOption,
+      },
     };
-
-    if (productId) {
-      cashfreePayload.order_tags = {
-        product_id: String(productId),
-        product_title: (productTitle || 'Course Material').slice(0, 50),
-      };
-    }
 
     const cfResponse = await fetch(cashfreeUrl, {
       method: 'POST',
@@ -196,10 +236,9 @@ export async function onRequestPost(context) {
       console.error('Cashfree order creation error response:', result);
       return new Response(
         JSON.stringify({
-          error: result.message || result.error || 'Failed to create Cashfree order',
+          error: result.message || result.error || 'Failed to create Cashfree order.',
           details: result,
           environment: isProd ? 'production' : 'sandbox',
-          targetUrl: cashfreeUrl,
         }),
         {
           status: cfResponse.status || 500,
@@ -211,14 +250,13 @@ export async function onRequestPost(context) {
     return new Response(
       JSON.stringify({
         success: true,
-        order_id: result.order_id || orderId,
         orderId: result.order_id || orderId,
-        payment_session_id: result.payment_session_id,
+        order_id: result.order_id || orderId,
         paymentSessionId: result.payment_session_id,
-        order_amount: result.order_amount || finalAmount,
-        orderAmount: result.order_amount || finalAmount,
-        order_currency: result.order_currency || 'INR',
-        orderCurrency: result.order_currency || 'INR',
+        payment_session_id: result.payment_session_id,
+        orderAmount: pricing.total,
+        order_amount: pricing.total,
+        orderCurrency: 'INR',
         environment: isProd ? 'production' : 'sandbox',
         isProd,
       }),
@@ -228,9 +266,12 @@ export async function onRequestPost(context) {
       }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    return new Response(
+      JSON.stringify({ error: err.message || 'Internal server error processing order.' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      }
+    );
   }
 }

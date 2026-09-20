@@ -18,16 +18,23 @@ export const OrderSuccessView: React.FC = () => {
     currentOrder,
     setCurrentView,
     openPdfViewer,
-    downloadBookPdf,
   } = useShop();
 
-  if (!currentOrder) {
+  const isVerifiedPaid = currentOrder && currentOrder.status === 'PAID' && currentOrder.fulfillment;
+
+  if (!isVerifiedPaid) {
     return (
       <div className="max-w-2xl mx-auto py-20 px-4 text-center space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">No active order found</h2>
+        <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto ring-8 ring-amber-50">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800">No verified paid order found</h2>
+        <p className="text-sm text-slate-600 max-w-md mx-auto">
+          Instant downloads and Google Sheet study planners are unlocked only after payment verification has been confirmed by the server.
+        </p>
         <button
           onClick={() => setCurrentView('catalog')}
-          className="px-5 py-2.5 bg-[#00875a] text-white text-xs font-semibold rounded-xl"
+          className="px-5 py-2.5 bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-semibold rounded-xl cursor-pointer"
         >
           Browse Study Materials
         </button>
@@ -64,31 +71,33 @@ export const OrderSuccessView: React.FC = () => {
       </div>
 
       {/* GOOGLE SHEET TEMPLATE DELIVERY CARD */}
-      <div className="bg-gradient-to-r from-emerald-600 via-[#00875a] to-[#0a2540] rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-emerald-400/30 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-2.5 py-1 rounded-full inline-block">
-              Study Planner & Template Access
-            </span>
-            <h2 className="text-xl sm:text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white">
-              Official Google Sheet / Copy Template Link
-            </h2>
-            <p className="text-xs text-slate-200 max-w-lg">
-              Click below to automatically create your personal copy in Google Sheets with full study schedule, mock tracker, and band score analytics.
-            </p>
-          </div>
+      {currentOrder.fulfillment?.googleSheetUrl && (
+        <div className="bg-gradient-to-r from-emerald-600 via-[#00875a] to-[#0a2540] rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-emerald-400/30 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-2.5 py-1 rounded-full inline-block">
+                Study Planner & Template Access
+              </span>
+              <h2 className="text-xl sm:text-2xl font-bold font-['Plus_Jakarta_Sans',sans-serif] text-white">
+                Official Google Sheet / Copy Template Link
+              </h2>
+              <p className="text-xs text-slate-200 max-w-lg">
+                Click below to automatically create your personal copy in Google Sheets with full study schedule, mock tracker, and band score analytics.
+              </p>
+            </div>
 
-          <a
-            href={GOOGLE_SHEET_COPY_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-emerald-800 hover:bg-emerald-50 text-xs sm:text-sm font-bold rounded-2xl shadow-md transition-all hover:scale-105 active:scale-95 shrink-0"
-          >
-            <span>Open Google Sheet /copy Template</span>
-            <ExternalLink className="w-4 h-4" />
-          </a>
+            <a
+              href={currentOrder.fulfillment.googleSheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-emerald-800 hover:bg-emerald-50 text-xs sm:text-sm font-bold rounded-2xl shadow-md transition-all hover:scale-105 active:scale-95 shrink-0"
+            >
+              <span>Open Google Sheet /copy Template</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Digital Access Section */}
       {hasDigital && (
@@ -108,49 +117,68 @@ export const OrderSuccessView: React.FC = () => {
           <div className="space-y-4 pt-2">
             {currentOrder.items
               .filter((i) => i.format === 'digital')
-              .map((item) => (
-                <div
-                  key={`${item.bookId}-digital`}
-                  className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs"
-                >
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <div className="shrink-0">
-                      <BookCover book={item.book} size="sm" showShadow={false} />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                        {item.book.title}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {item.book.samplePdfName} • High-Res PDF • Exam Edition 2026
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-emerald-700 font-semibold">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>License Activated for {currentOrder.shipping.email}</span>
+              .map((item) => {
+                const bookId = item.bookId || item.book?.id;
+                const serverDownload = currentOrder.fulfillment?.downloads?.find(
+                  (d) => d.bookId === bookId
+                );
+                const downloadUrl =
+                  serverDownload?.downloadUrl ||
+                  `/api/download?order_id=${encodeURIComponent(currentOrder.id)}&book_id=${encodeURIComponent(bookId)}`;
+
+                return (
+                  <div
+                    key={`${bookId}-digital`}
+                    className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs"
+                  >
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                      <div className="shrink-0">
+                        {item.book ? (
+                          <BookCover book={item.book} size="sm" showShadow={false} />
+                        ) : (
+                          <div className="w-12 h-16 bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-400 text-xs">
+                            PDF
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+                          {item.book?.title || 'Official Exam Guide'}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          {item.book?.samplePdfName || 'Exam_Prep_2026.pdf'} • High-Res PDF • Exam Edition 2026
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-emerald-700 font-semibold">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>License Activated for {currentOrder.shipping?.email}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button
-                      onClick={() => openPdfViewer(item.book)}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors"
-                    >
-                      <BookOpen className="w-4 h-4 text-slate-600" />
-                      <span>Read Online</span>
-                    </button>
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      {item.book && (
+                        <button
+                          onClick={() => openPdfViewer(item.book)}
+                          className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4 text-slate-600" />
+                          <span>Read Online</span>
+                        </button>
+                      )}
 
-                    <button
-                      onClick={() => downloadBookPdf(item.book)}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-                    >
-                      <DownloadCloud className="w-4 h-4" />
-                      <span>Download PDF</span>
-                    </button>
+                      <a
+                        href={downloadUrl}
+                        download
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#00875a] hover:bg-[#00734c] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        <DownloadCloud className="w-4 h-4" />
+                        <span>Download PDF</span>
+                      </a>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
       )}

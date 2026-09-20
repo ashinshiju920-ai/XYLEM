@@ -86,6 +86,7 @@ interface ShopContextType {
   shippingInfo: ShippingInfo;
   setShippingInfo: React.Dispatch<React.SetStateAction<ShippingInfo>>;
   currentOrder: Order | null;
+  setCurrentOrder: React.Dispatch<React.SetStateAction<Order | null>>;
   orders: Order[];
   placeOrder: (paymentMethod: 'upi' | 'card' | 'netbanking' | 'wallets') => Promise<Order>;
 
@@ -915,6 +916,7 @@ startxref
         shippingInfo,
         setShippingInfo,
         currentOrder,
+        setCurrentOrder,
         orders,
         placeOrder,
 

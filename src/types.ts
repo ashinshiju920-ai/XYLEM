@@ -99,9 +99,17 @@ export interface Order {
   discount: number;
   deliveryFee: number;
   total: number;
-  paymentMethod: PaymentMethod;
-  status: 'confirmed' | 'dispatched' | 'delivered';
-  paymentId: string;
+  paymentMethod?: PaymentMethod | string;
+  status: 'PAID' | 'PENDING' | 'confirmed' | 'dispatched' | 'delivered';
+  paymentId?: string;
+  fulfillment?: {
+    googleSheetUrl?: string;
+    downloads?: Array<{
+      bookId: string;
+      title: string;
+      downloadUrl: string;
+    }>;
+  } | null;
 }
 
 export interface Review {

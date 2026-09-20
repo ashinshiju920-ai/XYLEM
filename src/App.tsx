@@ -22,9 +22,92 @@ import { OrderSuccessView } from './views/OrderSuccessView';
 import { OrdersHistoryView } from './views/OrdersHistoryView';
 import { AboutView } from './views/AboutView';
 import { AdminView } from './views/AdminView';
+import { checkOrderStatus } from './utils/cashfree';
+import { Order } from './types';
+import { BOOKS } from './data/books';
 
 const ShopApp: React.FC = () => {
-  const { currentView, setCurrentView } = useShop();
+  const {
+    currentView,
+    setCurrentView,
+    books,
+    shippingInfo,
+    clearCart,
+    setCurrentOrder,
+    showToast,
+  } = useShop();
+
+  // Handle Cashfree return: verify payment server-side before unlocking order
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order_id') || params.get('orderId');
+    const cfStatus = params.get('cf_status') || params.get('status');
+
+    if (orderId) {
+      checkOrderStatus(orderId)
+        .then((res) => {
+          if (res && res.status === 'PAID') {
+            clearCart();
+            const verifiedOrder: Order = {
+              id: res.orderId || orderId,
+              date: res.date
+                ? new Date(res.date).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : new Date().toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  }),
+              items: (res.items || []).map((it: any) => {
+                const bookId = it.bookId || it.id;
+                const bookObj =
+                  books.find((b) => b.id === bookId) ||
+                  BOOKS.find((b) => b.id === bookId) ||
+                  BOOKS[0];
+                return {
+                  bookId,
+                  book: bookObj,
+                  format: (it.format === 'physical' ? 'physical' : 'digital') as 'digital' | 'physical',
+                  quantity: it.quantity || 1,
+                  price: it.unitPrice || (it.format === 'physical' ? 999 : 199),
+                };
+              }),
+              shipping: {
+                ...shippingInfo,
+                fullName: res.customerName || shippingInfo.fullName,
+                email: res.customerEmail || shippingInfo.email,
+              },
+              subtotal: res.total || 199,
+              discount: 0,
+              deliveryFee: 0,
+              total: res.total || 199,
+              paymentMethod: 'upi',
+              status: 'PAID',
+              fulfillment: res.fulfillment,
+            };
+            setCurrentOrder(verifiedOrder);
+            setCurrentView('order-success');
+            showToast('Payment confirmed! Your study materials are unlocked.', 'success');
+          } else {
+            showToast('Payment verification pending or order unpaid.', 'warning');
+          }
+        })
+        .catch(() => {
+          showToast('Could not verify payment status with server.', 'warning');
+        })
+        .finally(() => {
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+    } else if (cfStatus) {
+      // Visiting /?cf_status=success without real payment unlocks nothing!
+      showToast('No verified order found. Payment verification required.', 'warning');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [books]);
 
   // Scroll to top on view changes
   useEffect(() => {

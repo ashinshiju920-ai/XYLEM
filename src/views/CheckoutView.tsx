@@ -20,6 +20,11 @@ import { Book } from '../types';
 import { BOOKS } from '../data/books';
 import { XylemLogo } from '../components/XylemLogo';
 import { CashfreeLogo } from '../components/CashfreeLogo';
+import {
+  createCashfreeOrder,
+  loadCashfreeSDK,
+  CASHFREE_PAYMENT_FORM_URL,
+} from '../utils/cashfree';
 
 export const CheckoutView: React.FC = () => {
   const {
@@ -31,6 +36,9 @@ export const CheckoutView: React.FC = () => {
     openCart,
     cartCount,
     setIsSearchOpen,
+    appliedCoupon,
+    shippingInfo,
+    showToast,
   } = useShop();
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,10 +77,51 @@ export const CheckoutView: React.FC = () => {
     Math.max(10, Math.round((displayDiscount / (displayTotal + displayDiscount)) * 100))
   ) || 67;
 
-  // Direct Redirect to official Cashfree payment form
-  const handleProceedToPayment = () => {
+  // Server-authoritative checkout sending intent only (Rule 3)
+  const handleProceedToPayment = async () => {
     setIsProcessing(true);
-    window.location.href = 'https://payments.cashfree.com/forms/study-portal-buy';
+    try {
+      const cartPayload = (cart.length > 0 ? cart : [
+        {
+          bookId: activeBook.id,
+          format: activeFormat,
+          quantity: 1,
+          selectedAddonIds: [activeFormat],
+        },
+      ]).map((item: any) => ({
+        bookId: item.bookId || item.book?.id || activeBook.id,
+        addonIds: item.selectedAddonIds || [item.format || 'digital'],
+        format: item.format || 'digital',
+        quantity: item.quantity || 1,
+      }));
+
+      const orderData = await createCashfreeOrder({
+        cart: cartPayload,
+        couponCode: appliedCoupon,
+        shippingInfo,
+        deliveryOption: activeFormat === 'physical' ? 'physical' : 'digital',
+      });
+
+      if (orderData.paymentSessionId) {
+        const cashfree = await loadCashfreeSDK(
+          orderData.environment || (orderData.isProd ? 'production' : 'sandbox')
+        );
+        if (cashfree && typeof cashfree.checkout === 'function') {
+          await cashfree.checkout({
+            paymentSessionId: orderData.paymentSessionId,
+            redirectTarget: '_self',
+          });
+          return;
+        }
+      }
+
+      // Fallback if SDK cannot be loaded
+      window.location.href = CASHFREE_PAYMENT_FORM_URL;
+    } catch (err: any) {
+      console.error('Payment initiation error:', err);
+      showToast(err.message || 'Payment initiation failed. Please try again.', 'warning');
+      setIsProcessing(false);
+    }
   };
 
   return (

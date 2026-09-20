@@ -1,0 +1,204 @@
+// functions/utils/db.js
+// Cloudflare D1 Database & KV Order Persistence Layer
+
+export const GOOGLE_SHEET_COPY_URL =
+  'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/copy';
+
+/**
+ * Saves a new pending order into Cloudflare D1 and KV.
+ */
+export async function saveOrder(env, order) {
+  const now = new Date().toISOString();
+  const orderRecord = {
+    id: order.id,
+    cf_order_id: order.cf_order_id || order.id,
+    amount_paise: Number(order.amount_paise) || Math.round(Number(order.total) * 100),
+    currency: order.currency || 'INR',
+    status: order.status || 'PENDING',
+    customer_name: order.customer_name || order.shipping?.fullName || '',
+    customer_email: order.customer_email || order.shipping?.email || '',
+    customer_phone: order.customer_phone || order.shipping?.phone || '',
+    shipping_json: typeof order.shipping_json === 'string' ? order.shipping_json : JSON.stringify(order.shipping || {}),
+    items_json: typeof order.items_json === 'string' ? order.items_json : JSON.stringify(order.items || []),
+    created_at: order.created_at || now,
+    updated_at: order.updated_at || now,
+  };
+
+  // 1. Primary: Cloudflare D1 Database (if bound)
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO orders (
+          id, cf_order_id, amount_paise, currency, status,
+          customer_name, customer_email, customer_phone,
+          shipping_json, items_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          orderRecord.id,
+          orderRecord.cf_order_id,
+          orderRecord.amount_paise,
+          orderRecord.currency,
+          orderRecord.status,
+          orderRecord.customer_name,
+          orderRecord.customer_email,
+          orderRecord.customer_phone,
+          orderRecord.shipping_json,
+          orderRecord.items_json,
+          orderRecord.created_at,
+          orderRecord.updated_at
+        )
+        .run();
+    } catch (d1Err) {
+      console.warn('D1 insert failed, continuing to KV fallback:', d1Err.message);
+    }
+  }
+
+  // 2. Secondary & Local Fallback: Cloudflare KV
+  if (env && env.PRODUCTS_KV) {
+    try {
+      const ttl = 86400 * 30; // 30 days retention
+      await env.PRODUCTS_KV.put(`order:${orderRecord.id}`, JSON.stringify(orderRecord), { expirationTtl: ttl });
+      if (orderRecord.cf_order_id && orderRecord.cf_order_id !== orderRecord.id) {
+        await env.PRODUCTS_KV.put(`order_cf:${orderRecord.cf_order_id}`, orderRecord.id, { expirationTtl: ttl });
+      }
+    } catch (kvErr) {
+      console.warn('KV order persistence error:', kvErr.message);
+    }
+  }
+
+  return orderRecord;
+}
+
+/**
+ * Retrieves an order from D1 or KV by either internal order ID or Cashfree order ID.
+ */
+export async function getOrder(env, orderId) {
+  if (!orderId) return null;
+  const cleanId = String(orderId).trim();
+
+  // 1. Try D1
+  if (env && env.DB) {
+    try {
+      const row = await env.DB.prepare(
+        `SELECT * FROM orders WHERE id = ? OR cf_order_id = ? LIMIT 1`
+      )
+        .bind(cleanId, cleanId)
+        .first();
+
+      if (row) {
+        return {
+          ...row,
+          shipping: JSON.parse(row.shipping_json || '{}'),
+          items: JSON.parse(row.items_json || '[]'),
+        };
+      }
+    } catch (d1Err) {
+      console.warn('D1 query error:', d1Err.message);
+    }
+  }
+
+  // 2. Try KV
+  if (env && env.PRODUCTS_KV) {
+    try {
+      let data = await env.PRODUCTS_KV.get(`order:${cleanId}`, { type: 'json' });
+      if (!data) {
+        const mappedId = await env.PRODUCTS_KV.get(`order_cf:${cleanId}`);
+        if (mappedId) {
+          data = await env.PRODUCTS_KV.get(`order:${mappedId}`, { type: 'json' });
+        }
+      }
+      if (data) {
+        return {
+          ...data,
+          shipping: typeof data.shipping_json === 'string' ? JSON.parse(data.shipping_json) : (data.shipping || {}),
+          items: typeof data.items_json === 'string' ? JSON.parse(data.items_json) : (data.items || []),
+        };
+      }
+    } catch (kvErr) {
+      console.warn('KV query error:', kvErr.message);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Updates order status (e.g. to 'PAID') idempotently.
+ */
+export async function updateOrderStatus(env, orderId, newStatus) {
+  const now = new Date().toISOString();
+  const cleanId = String(orderId).trim();
+
+  // 1. Update D1
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        `UPDATE orders SET status = ?, updated_at = ? WHERE id = ? OR cf_order_id = ?`
+      )
+        .bind(newStatus, now, cleanId, cleanId)
+        .run();
+    } catch (d1Err) {
+      console.warn('D1 update error:', d1Err.message);
+    }
+  }
+
+  // 2. Update KV
+  if (env && env.PRODUCTS_KV) {
+    try {
+      const existing = await getOrder(env, cleanId);
+      if (existing) {
+        const updated = {
+          ...existing,
+          status: newStatus,
+          updated_at: now,
+        };
+        await env.PRODUCTS_KV.put(`order:${existing.id}`, JSON.stringify(updated), { expirationTtl: 86400 * 30 });
+      }
+    } catch (kvErr) {
+      console.warn('KV update error:', kvErr.message);
+    }
+  }
+}
+
+/**
+ * Records an order event (webhook payload, status check) into audit log.
+ */
+export async function recordOrderEvent(env, { orderId, eventType, rawPayload }) {
+  const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO order_events (id, order_id, event_type, raw_payload, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+        .bind(eventId, orderId || 'unknown', eventType, rawPayload || '', now)
+        .run();
+    } catch (err) {
+      console.warn('Could not record order event in D1:', err.message);
+    }
+  }
+}
+
+/**
+ * Issues download links & templates ONLY after confirming order status === 'PAID'.
+ */
+export function issuePaidFulfillmentLinks(order) {
+  if (!order || order.status !== 'PAID') {
+    return null;
+  }
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  const digitalItems = items.filter((i) => i.format === 'digital' || i.deliveryOption === 'digital');
+
+  return {
+    googleSheetUrl: GOOGLE_SHEET_COPY_URL,
+    downloads: digitalItems.map((item) => ({
+      bookId: item.bookId || item.id,
+      title: item.title,
+      downloadUrl: `/api/download?order_id=${encodeURIComponent(order.id)}&book_id=${encodeURIComponent(item.bookId || item.id)}`,
+    })),
+  };
+}
