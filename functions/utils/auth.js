@@ -149,12 +149,15 @@ export async function verifySessionToken(token, secret) {
   }
 }
 
+import { getCorsHeaders } from './cors.js';
+
 /**
  * Middleware function that reads the session cookie, verifies it,
  * and returns HTTP 401 JSON Response if invalid or absent.
  * Returns null if authentication succeeds.
  */
 export async function requireAdmin(request, env) {
+  const cors = getCorsHeaders(request, env);
   const secret = env?.ADMIN_SESSION_SECRET || env?.ADMIN_PASSWORD_HASH;
 
   if (!secret) {
@@ -162,7 +165,7 @@ export async function requireAdmin(request, env) {
       JSON.stringify({ error: 'Server configuration error: Admin authentication is not configured.' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -186,7 +189,7 @@ export async function requireAdmin(request, env) {
       JSON.stringify({ error: 'Unauthorized: Admin authentication required' }),
       {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -197,7 +200,7 @@ export async function requireAdmin(request, env) {
       JSON.stringify({ error: 'Unauthorized: Invalid or expired admin session' }),
       {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }

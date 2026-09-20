@@ -1,19 +1,14 @@
 // functions/api/admin/logout.js
+import { getCorsHeaders, handleOptions } from '../../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
-export async function onRequestPost() {
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const cors = getCorsHeaders(request, env);
+
   // Clear admin_session cookie immediately
   const cookieVal = 'admin_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0';
 
@@ -24,7 +19,7 @@ export async function onRequestPost() {
       headers: {
         'Content-Type': 'application/json',
         'Set-Cookie': cookieVal,
-        ...CORS_HEADERS,
+        ...cors,
       },
     }
   );

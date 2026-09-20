@@ -1,24 +1,19 @@
 // functions/api/create-cashfree-order.js
 // Server-Authoritative Cashfree Order Creation Endpoint
+// Hardened with strict CORS, KV rate limiting, and sanitized error responses
 
 import { computeOrderPrice, validateShippingInfo } from '../utils/pricing.js';
 import { saveOrder } from '../utils/db.js';
+import { getCorsHeaders, handleOptions } from '../utils/cors.js';
+import { checkRateLimit } from '../utils/rateLimit.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestGet(context) {
-  const { env } = context;
+  const { request, env } = context;
+  const corsHeaders = getCorsHeaders(request, env);
   const secretKey = env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '';
   const appId = env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '';
   const configuredEnv = env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '';
@@ -35,22 +30,46 @@ export async function onRequestGet(context) {
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     }
   );
 }
 
 export async function onRequest(context) {
   const method = context.request.method.toUpperCase();
-  if (method === 'OPTIONS') return onRequestOptions();
+  if (method === 'OPTIONS') return onRequestOptions(context);
   if (method === 'POST') return onRequestPost(context);
   if (method === 'GET') return onRequestGet(context);
-  return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+  return new Response('Method not allowed', {
+    status: 405,
+    headers: getCorsHeaders(context.request, context.env),
+  });
 }
 
 export async function onRequestPost(context) {
+  const { request, env } = context;
+  const corsHeaders = getCorsHeaders(request, env);
+
   try {
-    const { request, env } = context;
+    // 1. Rate Limiting (Phase 5.3): Max 20 order attempts per IP per 10 minutes
+    const clientIp = request.headers.get('cf-connecting-ip') || 'unknown';
+    const rateCheck = await checkRateLimit(env, `order:${clientIp}`, 20, 600);
+
+    if (!rateCheck.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'Too many order requests. Please wait a few minutes before trying again.',
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateCheck.resetSeconds || 600),
+            ...corsHeaders,
+          },
+        }
+      );
+    }
 
     let body = {};
     try {
@@ -58,7 +77,7 @@ export async function onRequestPost(context) {
     } catch {
       return new Response(
         JSON.stringify({ error: 'Malformed JSON payload.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -81,7 +100,7 @@ export async function onRequestPost(context) {
           JSON.stringify({
             error: `Price tampering detected: browser may never provide '${key}'. Server is authoritative.`,
           }),
-          { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
         );
       }
     }
@@ -95,7 +114,7 @@ export async function onRequestPost(context) {
               JSON.stringify({
                 error: `Price tampering detected: cart item contains forbidden key '${key}'.`,
               }),
-              { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+              { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
             );
           }
         }
@@ -112,7 +131,7 @@ export async function onRequestPost(context) {
     if (!Array.isArray(cart) || cart.length === 0) {
       return new Response(
         JSON.stringify({ error: 'Cart cannot be empty.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -122,15 +141,16 @@ export async function onRequestPost(context) {
     const configuredEnv = env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '';
 
     if (!secretKey || !appId) {
+      console.error('CASHFREE_SECRET_KEY or CASHFREE_APP_ID missing in environment');
       return new Response(
         JSON.stringify({
-          error: 'Server configuration error: CASHFREE_SECRET_KEY or CASHFREE_APP_ID is not configured in Cloudflare environment variables.',
+          error: 'Payment gateway configuration is unavailable. Please contact administrator.',
         }),
-        { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    // 1. Authoritative price calculation from KV catalogue
+    // 2. Authoritative price calculation from KV catalogue
     let pricing;
     try {
       pricing = await computeOrderPrice(
@@ -144,11 +164,11 @@ export async function onRequestPost(context) {
     } catch (pricingErr) {
       return new Response(
         JSON.stringify({ error: pricingErr.message || 'Pricing computation failed.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    // 2. Validate customer & shipping details
+    // 3. Validate customer & shipping details
     const shippingValidation = validateShippingInfo(shippingInfo, pricing.hasPhysical);
     if (!shippingValidation.isValid) {
       return new Response(
@@ -156,7 +176,7 @@ export async function onRequestPost(context) {
           error: `Shipping validation failed: ${shippingValidation.errors.join(' ')}`,
           errors: shippingValidation.errors,
         }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
@@ -181,7 +201,7 @@ export async function onRequestPost(context) {
     const orderId = `order_${timestamp}_${Math.floor(1000 + Math.random() * 9000)}`;
     const customerId = `cust_${cleanShipping.phone}_${timestamp % 10000}`;
 
-    // 3. Write PENDING order row to D1 / KV BEFORE calling Cashfree
+    // 4. Write PENDING order row to D1 / KV BEFORE calling Cashfree
     await saveOrder(env, {
       id: orderId,
       cf_order_id: orderId,
@@ -236,13 +256,11 @@ export async function onRequestPost(context) {
       console.error('Cashfree order creation error response:', result);
       return new Response(
         JSON.stringify({
-          error: result.message || result.error || 'Failed to create Cashfree order.',
-          details: result,
-          environment: isProd ? 'production' : 'sandbox',
+          error: 'Unable to initiate order payment with gateway. Please try again later.',
         }),
         {
           status: cfResponse.status || 500,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
     }
@@ -262,15 +280,16 @@ export async function onRequestPost(context) {
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       }
     );
   } catch (err) {
+    console.error('Internal order creation error:', err);
     return new Response(
-      JSON.stringify({ error: err.message || 'Internal server error processing order.' }),
+      JSON.stringify({ error: 'Internal server error processing checkout order.' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       }
     );
   }

@@ -2,30 +2,24 @@
 // Server-Side Cashfree Order Verification & Fulfillment Gate
 
 import { getOrder, updateOrderStatus, issuePaidFulfillmentLinks } from '../utils/db.js';
+import { getCorsHeaders, handleOptions } from '../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestGet(context) {
+  const { request, env } = context;
+  const cors = getCorsHeaders(request, env);
+
   try {
-    const { request, env } = context;
     const url = new URL(request.url);
     const orderId = url.searchParams.get('order_id') || url.searchParams.get('orderId');
 
     if (!orderId || typeof orderId !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Missing order_id parameter.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
       );
     }
 
@@ -42,7 +36,7 @@ export async function onRequestGet(context) {
           items: [],
           error: 'Order not found in database.',
         }),
-        { status: 404, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
       );
     }
 
@@ -99,7 +93,7 @@ export async function onRequestGet(context) {
           currency: order.currency || 'INR',
           date: order.created_at,
         }),
-        { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+        { status: 200, headers: { 'Content-Type': 'application/json', ...cors } }
       );
     }
 
@@ -111,12 +105,13 @@ export async function onRequestGet(context) {
         items: order.items || [],
         total: Math.round(order.amount_paise / 100),
       }),
-      { status: 200, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      { status: 200, headers: { 'Content-Type': 'application/json', ...cors } }
     );
   } catch (err) {
+    console.error('Order status retrieval error:', err);
     return new Response(
-      JSON.stringify({ error: err.message || 'Internal error retrieving order status.' }),
-      { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
+      JSON.stringify({ error: 'Internal error retrieving order status.' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...cors } }
     );
   }
 }

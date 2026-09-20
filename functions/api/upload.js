@@ -1,15 +1,10 @@
 // functions/api/upload.js
 // Cloudflare Pages Function: Cloudinary Image Upload
-// Hardened with requireAdmin, 5 MB limit, binary magic bytes validation, and server-side filename generation
+// Hardened with requireAdmin, 5 MB limit, binary magic bytes validation, KV rate limiting, and strict CORS
 
 import { requireAdmin } from '../utils/auth.js';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Credentials': 'true',
-};
+import { getCorsHeaders, handleOptions } from '../utils/cors.js';
+import { checkRateLimit } from '../utils/rateLimit.js';
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -57,32 +52,51 @@ function verifyImageMagicBytes(buffer) {
   return null;
 }
 
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestPost(context) {
-  try {
-    const { request, env } = context;
+  const { request, env } = context;
+  const corsHeaders = getCorsHeaders(request, env);
 
+  try {
     // 1. Enforce admin authentication
     const authError = await requireAdmin(request, env);
     if (authError) return authError;
 
-    // 2. Read Cloudinary credentials (Rule 2: throw 500 if missing, never fall back to literal)
+    // 2. Rate Limiting (Phase 5.3): Max 30 uploads per IP per 10 minutes
+    const clientIp = request.headers.get('cf-connecting-ip') || 'unknown';
+    const rateCheck = await checkRateLimit(env, `upload:${clientIp}`, 30, 600);
+
+    if (!rateCheck.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'Too many upload attempts. Please wait before uploading more files.',
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateCheck.resetSeconds || 600),
+            ...corsHeaders,
+          },
+        }
+      );
+    }
+
+    // 3. Read Cloudinary credentials (Rule 2: throw 500 if missing, never fall back to literal)
     const cloudName = env && env.CLOUDINARY_CLOUD_NAME ? String(env.CLOUDINARY_CLOUD_NAME).trim() : '';
     const apiKey = env && env.CLOUDINARY_API_KEY ? String(env.CLOUDINARY_API_KEY).trim() : '';
     const apiSecret = env && env.CLOUDINARY_API_SECRET ? String(env.CLOUDINARY_API_SECRET).trim() : '';
 
     if (!cloudName || !apiKey || !apiSecret) {
+      console.error('Cloudinary credentials missing from environment');
       return new Response(
-        JSON.stringify({ error: 'Server configuration error: Missing Cloudinary credentials in environment' }),
+        JSON.stringify({ error: 'Media storage configuration unavailable.' }),
         {
           status: 500,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
     }
@@ -96,23 +110,23 @@ export async function onRequestPost(context) {
         JSON.stringify({ error: 'No image file provided in request.' }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
     }
 
-    // 3. Enforce maximum file size: 5 MB
+    // 4. Enforce maximum file size: 5 MB
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return new Response(
         JSON.stringify({ error: 'File size exceeds maximum permitted limit of 5 MB.' }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
     }
 
-    // 4. Verify authentic binary magic bytes (only JPEG, PNG, WebP)
+    // 5. Verify authentic binary magic bytes (only JPEG, PNG, WebP)
     const arrayBuffer = await file.arrayBuffer();
     const verifiedMime = verifyImageMagicBytes(arrayBuffer);
 
@@ -123,7 +137,7 @@ export async function onRequestPost(context) {
         }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );
     }
@@ -131,7 +145,7 @@ export async function onRequestPost(context) {
     const timestamp = Math.round(new Date().getTime() / 1000);
     const folder = 'ecommerce_products';
 
-    // 5. Generate filename strictly server-side (never trust client filename)
+    // 6. Generate filename strictly server-side (never trust client filename)
     const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
@@ -171,9 +185,10 @@ export async function onRequestPost(context) {
     const result = await cloudinaryResponse.json();
 
     if (!cloudinaryResponse.ok) {
-      return new Response(JSON.stringify({ error: result.error?.message || 'Cloudinary upload failed.' }), {
+      console.error('Cloudinary API upload error:', result);
+      return new Response(JSON.stringify({ error: 'Image processing failed. Please try again.' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
 
@@ -188,13 +203,14 @@ export async function onRequestPost(context) {
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message || 'Internal server error during upload.' }), {
+    console.error('Internal upload exception:', err);
+    return new Response(JSON.stringify({ error: 'Internal server error during upload.' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 }

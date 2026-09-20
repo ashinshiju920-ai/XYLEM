@@ -1,21 +1,14 @@
 // functions/api/admin/session.js
 import { verifySessionToken } from '../../utils/auth.js';
+import { getCorsHeaders, handleOptions } from '../../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
+  const cors = getCorsHeaders(request, env);
   const secret = env?.ADMIN_SESSION_SECRET || env?.ADMIN_PASSWORD_HASH;
 
   if (!secret) {
@@ -23,7 +16,7 @@ export async function onRequestGet(context) {
       JSON.stringify({ authenticated: false }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -47,7 +40,7 @@ export async function onRequestGet(context) {
       JSON.stringify({ authenticated: false }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -59,7 +52,7 @@ export async function onRequestGet(context) {
     JSON.stringify({ authenticated: isAuthenticated }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...cors },
     }
   );
 }

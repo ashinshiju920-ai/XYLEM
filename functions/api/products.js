@@ -3,23 +3,21 @@
 // Hardened with requireAdmin, 1 MB payload cap, and strict field size-capping & schema validation
 
 import { requireAdmin } from '../utils/auth.js';
+import { getCorsHeaders, handleOptions } from '../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS, HEAD',
-  'Access-Control-Allow-Headers': 'Content-Type, Cache-Control, Pragma, If-None-Match',
-  'Access-Control-Allow-Credentials': 'true',
-};
-
-const NO_CACHE_HEADERS = {
-  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-  'CDN-Cache-Control': 'no-store',
-  'Cloudflare-CDN-Cache-Control': 'no-store',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-  'Surrogate-Control': 'no-store',
-  ...CORS_HEADERS,
-};
+function getResponseHeaders(request, env) {
+  const cors = getCorsHeaders(request, env);
+  return {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'CDN-Cache-Control': 'no-store',
+    'Cloudflare-CDN-Cache-Control': 'no-store',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+    ...cors,
+  };
+}
 
 const MAX_PAYLOAD_BYTES = 1024 * 1024; // 1 MB limit
 
@@ -114,16 +112,15 @@ function sanitizeProduct(raw) {
   };
 }
 
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: NO_CACHE_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestGet(context) {
+  const { request, env } = context;
+  const responseHeaders = getResponseHeaders(request, env);
+
   try {
-    const { request, env } = context;
     const url = new URL(request.url);
     const checkOnly = url.searchParams.get('check') === 'version';
 
@@ -134,7 +131,7 @@ export async function onRequestGet(context) {
         if (version) {
           return new Response(JSON.stringify({ success: true, version: Number(version) }), {
             status: 200,
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            headers: responseHeaders,
           });
         }
       }
@@ -150,13 +147,13 @@ export async function onRequestGet(context) {
             }),
             {
               status: 200,
-              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+              headers: responseHeaders,
             }
           );
         }
         return new Response(JSON.stringify({ success: true, ...data }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          headers: responseHeaders,
         });
       }
     }
@@ -178,33 +175,35 @@ export async function onRequestGet(context) {
             }),
             {
               status: 200,
-              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+              headers: responseHeaders,
             }
           );
         }
         return new Response(JSON.stringify({ success: true, ...data }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          headers: responseHeaders,
         });
       }
     }
 
     return new Response(JSON.stringify({ success: false, message: 'No remote catalog initialized yet' }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+      headers: responseHeaders,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('Products GET error:', err);
+    return new Response(JSON.stringify({ error: 'Failed to fetch products catalog.' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+      headers: responseHeaders,
     });
   }
 }
 
 export async function onRequestPost(context) {
-  try {
-    const { request, env } = context;
+  const { request, env } = context;
+  const responseHeaders = getResponseHeaders(request, env);
 
+  try {
     // 1. Enforce admin authentication
     const authError = await requireAdmin(request, env);
     if (authError) return authError;
@@ -218,7 +217,7 @@ export async function onRequestPost(context) {
         }),
         {
           status: 413,
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          headers: responseHeaders,
         }
       );
     }
@@ -229,7 +228,7 @@ export async function onRequestPost(context) {
     } catch {
       return new Response(
         JSON.stringify({ error: 'Malformed JSON payload.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS } }
+        { status: 400, headers: responseHeaders }
       );
     }
 
@@ -238,11 +237,12 @@ export async function onRequestPost(context) {
     const apiSecret = env?.CLOUDINARY_API_SECRET;
 
     if (!cloudName || !apiKey || !apiSecret) {
+      console.error('Cloudinary credentials missing in environment');
       return new Response(
-        JSON.stringify({ error: 'Server configuration error: Missing Cloudinary credentials in environment' }),
+        JSON.stringify({ error: 'Catalog storage configuration is unavailable.' }),
         {
           status: 500,
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          headers: responseHeaders,
         }
       );
     }
@@ -373,9 +373,10 @@ export async function onRequestPost(context) {
     const cResult = await cRes.json();
 
     if (!cRes.ok) {
-      return new Response(JSON.stringify({ error: cResult.error?.message || 'Cloudinary save failed' }), {
+      console.error('Cloudinary save error:', cResult);
+      return new Response(JSON.stringify({ error: 'Catalog storage update failed.' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        headers: responseHeaders,
       });
     }
 
@@ -390,13 +391,14 @@ export async function onRequestPost(context) {
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        headers: responseHeaders,
       }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('Products POST error:', err);
+    return new Response(JSON.stringify({ error: 'Internal server error updating catalog.' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+      headers: responseHeaders,
     });
   }
 }

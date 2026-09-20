@@ -1,21 +1,14 @@
 // functions/api/admin/login.js
 import { hashPassword, createSessionToken } from '../../utils/auth.js';
+import { getCorsHeaders, handleOptions } from '../../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const cors = getCorsHeaders(request, env);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const rateLimitKey = `ratelimit:login:${ip}`;
 
@@ -33,7 +26,7 @@ export async function onRequestPost(context) {
             headers: {
               'Content-Type': 'application/json',
               'Retry-After': '900',
-              ...CORS_HEADERS,
+              ...cors,
             },
           }
         );
@@ -57,7 +50,7 @@ export async function onRequestPost(context) {
       JSON.stringify({ error: 'Password is required' }),
       {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -71,7 +64,7 @@ export async function onRequestPost(context) {
       JSON.stringify({ error: 'Server configuration error: Admin credentials not configured in environment.' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -101,7 +94,7 @@ export async function onRequestPost(context) {
       JSON.stringify({ error: 'Invalid credentials. Please try again.' }),
       {
         status: 401,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        headers: { 'Content-Type': 'application/json', ...cors },
       }
     );
   }
@@ -126,7 +119,7 @@ export async function onRequestPost(context) {
       headers: {
         'Content-Type': 'application/json',
         'Set-Cookie': cookieVal,
-        ...CORS_HEADERS,
+        ...cors,
       },
     }
   );

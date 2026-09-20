@@ -3,25 +3,17 @@
 
 import { requireAdmin } from '../../utils/auth.js';
 import { listOrders } from '../../utils/db.js';
+import { getCorsHeaders, handleOptions } from '../../utils/cors.js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Credentials': 'true',
-};
-
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function onRequestOptions(context) {
+  return handleOptions(context.request, context.env);
 }
 
 export async function onRequestGet(context) {
-  try {
-    const { request, env } = context;
+  const { request, env } = context;
+  const cors = getCorsHeaders(request, env);
 
+  try {
     // 1. Enforce admin authentication
     const authError = await requireAdmin(request, env);
     if (authError) return authError;
@@ -46,18 +38,19 @@ export async function onRequestGet(context) {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
-          ...CORS_HEADERS,
+          ...cors,
         },
       }
     );
   } catch (err) {
+    console.error('Admin orders listing error:', err);
     return new Response(
-      JSON.stringify({ error: err.message || 'Internal error listing orders.' }),
+      JSON.stringify({ error: 'Internal error listing orders.' }),
       {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          ...CORS_HEADERS,
+          ...cors,
         },
       }
     );
