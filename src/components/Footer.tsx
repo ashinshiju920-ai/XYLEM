@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
     if (!val) return;
 
     setSubscribed(true);
-    showToast('Thank you for subscribing to Xylem Learning updates!');
+    showToast('Thank you for subscribing to Xylem Bookstore updates!');
     setEmail('');
   };
 
@@ -29,13 +29,13 @@ export const Footer: React.FC = () => {
               <XylemLogo size="md" showTagline={true} />
             </div>
             <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
-              Xylem Learning is your dedicated preparation partner for global language and professional licensing examinations. Trusted by over 50,000+ learners across India and abroad.
+              Xylem Bookstore is your dedicated preparation partner for global language and professional licensing examinations. Trusted by over 50,000+ learners across India and abroad.
             </p>
             <div className="pt-2">
               <div className="text-xs text-emerald-400 font-semibold tracking-wider uppercase mb-1">
                 Customer Care & Inquiries
               </div>
-              <p className="text-sm text-slate-300 font-medium">support@xylemlearning.com</p>
+              <p className="text-sm text-slate-300 font-medium">support@xylembookstore.com</p>
               <p className="text-xs text-slate-400">+91 98765 43210 (Mon - Sat, 9 AM - 7 PM IST)</p>
             </div>
           </div>
@@ -232,7 +232,7 @@ export const Footer: React.FC = () => {
         {/* Bottom copyright & policies bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
           <div>
-            © 2025 Xylem Learning. All rights reserved.
+            © 2025 Xylem Bookstore. All rights reserved.
           </div>
           <div className="flex items-center space-x-6">
             <button

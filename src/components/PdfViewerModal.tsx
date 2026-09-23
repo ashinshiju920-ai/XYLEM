@@ -11,7 +11,7 @@ export const PdfViewerModal: React.FC = () => {
 
   const handleDownload = () => {
     // Generate text blob for true file download
-    const content = `XYLEM LEARNING - OFFICIAL DIGITAL STUDY GUIDE\n\nTitle: ${activePdfBook.title}\nSubtitle: ${activePdfBook.subtitle}\nCategory: ${activePdfBook.category}\n\nFeatures:\n${activePdfBook.features.map(f => `• ${f}`).join('\n')}\n\nWhat You Get:\n${activePdfBook.whatYouGet.map(w => `✓ ${w}`).join('\n')}\n\nTable of Contents:\n${activePdfBook.tableOfContents.map(t => `${t.chapter} ........... ${t.pages}`).join('\n')}\n\nThank you for choosing Xylem Learning!\nSupport: support@xylemlearning.com\nWebsite: https://xylemlearning.com`;
+    const content = `XYLEM BOOKSTORE - OFFICIAL DIGITAL STUDY GUIDE\n\nTitle: ${activePdfBook.title}\nSubtitle: ${activePdfBook.subtitle}\nCategory: ${activePdfBook.category}\n\nFeatures:\n${activePdfBook.features.map(f => `• ${f}`).join('\n')}\n\nWhat You Get:\n${activePdfBook.whatYouGet.map(w => `✓ ${w}`).join('\n')}\n\nTable of Contents:\n${activePdfBook.tableOfContents.map(t => `${t.chapter} ........... ${t.pages}`).join('\n')}\n\nThank you for choosing Xylem Bookstore!\nSupport: support@xylembookstore.com\nWebsite: https://xylembookstore.com`;
     
     const blob = new Blob([content], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -71,7 +71,7 @@ export const PdfViewerModal: React.FC = () => {
             {/* Page Header */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 text-xs text-slate-500 font-sans font-medium">
               <span className="font-bold text-emerald-700 uppercase tracking-wider">
-                Xylem Learning • Official Material
+                Xylem Bookstore • Official Material
               </span>
               <span>{activePdfBook.category} Exam Prep</span>
             </div>

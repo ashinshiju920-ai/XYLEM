@@ -32,7 +32,7 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self "https://*.cashfree.com")
 
   # 7. Content Security Policy (CSP)
-  # Tailored specifically for Xylem Learning:
+  # Tailored specifically for Xylem Bookstore:
   # - Cashfree Payments SDK & Payment Frames
   # - Remote Image CDN
   # - Google Fonts Typography

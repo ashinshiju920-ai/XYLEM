@@ -52,18 +52,19 @@ export default function CheckoutPage({ productsFromAdmin = [] }) {
     setErrorMessage("");
 
     try {
-      // 1. Create order on Cloudflare Pages function
-      const response = await fetch("/api/create-order", {
+      // 1. Create order on Cloudflare Pages function using Cashfree integration
+      const response = await fetch("/api/create-cashfree-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId: selectedProduct.id,
-          productTitle: selectedProduct.title,
-          price: selectedProduct.price, // Guaranteed exact price from checkout state
-          customerName: formData.customerName,
-          customerEmail: formData.customerEmail,
-          customerPhone: formData.customerPhone
-        })
+          cart: [{ productId: selectedProduct.id, quantity: 1 }],
+          shippingInfo: {
+            fullName: formData.customerName,
+            email: formData.customerEmail,
+            phone: formData.customerPhone,
+          },
+          deliveryOption: "digital",
+        }),
       });
 
       const data = await response.json();

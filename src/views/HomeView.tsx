@@ -373,11 +373,11 @@ export const HomeView: React.FC = () => {
         </div>
       </section>
 
-      {/* 5. WHY XYLEM LEARNING (Image 5) */}
+      {/* 5. WHY XYLEM BOOKSTORE (Image 5) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <span className="text-xs font-semibold tracking-widest uppercase text-emerald-700 block mb-1 font-['DM_Sans',sans-serif]">
-            WHY XYLEM LEARNING
+            WHY XYLEM BOOKSTORE
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-[#0a2540] font-['Plus_Jakarta_Sans',sans-serif]">
             More Than Just Books. A Complete Learning Partner.
@@ -492,7 +492,7 @@ export const HomeView: React.FC = () => {
           <div className="max-w-2xl space-y-4">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-['Plus_Jakarta_Sans',sans-serif] leading-tight">
               Prepare smarter. <br />
-              Learn with Xylem.
+              Learn with Xylem Bookstore.
             </h2>
             <p className="text-sm sm:text-base text-slate-300 font-['DM_Sans',sans-serif]">
               Your goals. Our materials. A brighter future.

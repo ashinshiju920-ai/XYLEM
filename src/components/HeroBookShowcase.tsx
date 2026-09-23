@@ -85,7 +85,7 @@ export const HeroBookShowcase: React.FC = () => {
           {/* Base High-Resolution Showcase Graphic */}
           <img
             src="/hero-books-showcase.jpg"
-            alt="Xylem Learning Official Preparation Guides - IELTS, OET, and German"
+            alt="Xylem Bookstore Official Preparation Guides - IELTS, OET, and German"
             className="w-full h-auto block object-cover rounded-[28px] sm:rounded-[38px] transition-transform duration-500 group-hover:scale-[1.015]"
             draggable={false}
           />

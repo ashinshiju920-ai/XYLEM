@@ -580,7 +580,7 @@ export const CheckoutView: React.FC = () => {
                 XYLEM
               </span>
               <span className="text-xs font-bold tracking-widest uppercase text-emerald-400">
-                LEARNING
+                BOOKSTORE
               </span>
             </div>
             <div className="text-[10px] tracking-widest uppercase text-emerald-300/80 font-bold">

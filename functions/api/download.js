@@ -49,15 +49,15 @@ export async function onRequestGet(context) {
     }
 
     // Generate authenticated official PDF response
-    const titleClean = (book.title || 'Xylem_Learning_Material').replace(/[^a-zA-Z0-9]/g, '_');
+    const titleClean = (book.title || 'Xylem_Bookstore_Material').replace(/[^a-zA-Z0-9]/g, '_');
     const pdfContent = `%PDF-1.4
 %
 1 0 obj
-<< /Title (${book.title} - Xylem Learning Official Exam Guide)
-   /Author (Xylem Learning Academic Editorial Board)
+<< /Title (${book.title} - Xylem Bookstore Official Exam Guide)
+   /Author (Xylem Bookstore Academic Editorial Board)
    /Subject (${book.category || 'Exam'} Preparation)
    /Keywords (IELTS, OET, PTE, German, Mock Test, Study Guide)
-   /Creator (Xylem Learning Publishing Engine)
+   /Creator (Xylem Bookstore Publishing Engine)
 >>
 endobj
 2 0 obj
@@ -75,7 +75,7 @@ stream
 BT
 /F1 24 Tf
 50 750 Td
-(XYLEM LEARNING OFFICIAL MATERIAL) Tj
+(XYLEM BOOKSTORE OFFICIAL MATERIAL) Tj
 /F1 16 Tf
 0 -40 Td
 (${book.title}) Tj
@@ -83,7 +83,9 @@ BT
 0 -30 Td
 (Licensed to: ${order.customer_email || order.customer_name || 'Verified Student'}) Tj
 0 -20 Td
-(Order ID: ${order.id} | Status: VERIFIED PAID) Tj
+(Category: ${book.category || 'Certification'} | Edition 2026) Tj
+0 -20 Td
+(Security Identifier: ${order.id}) Tj
 ET
 endstream
 endobj
@@ -105,7 +107,7 @@ startxref
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${titleClean}_XylemLearning.pdf"`,
+        'Content-Disposition': `attachment; filename="${titleClean}_XylemBookstore.pdf"`,
         'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     });

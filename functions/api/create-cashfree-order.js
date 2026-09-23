@@ -216,8 +216,9 @@ export async function onRequestPost(context) {
     });
 
     // Build return URL
-    const requestOrigin = new URL(request.url).origin;
-    const returnUrl = `${requestOrigin}/?order_id={order_id}&cf_status={order_status}`;
+    // Redirect to Cashfree payment form after checkout
+    const returnUrl = `https://payments.cashfree.com/forms/study-portal-buy?order_id=${orderId}&cf_status={order_status}&form_code=study-portal-buy&cif_gorm_id=314009172`;
+
 
     const cashfreePayload = {
       order_id: orderId,
@@ -232,7 +233,7 @@ export async function onRequestPost(context) {
       order_meta: {
         return_url: returnUrl,
       },
-      order_note: `Xylem Learning - ${pricing.items[0]?.title ? pricing.items[0].title.slice(0, 35) : 'Exam Study Guide'}`,
+      order_note: `Xylem Bookstore - ${pricing.items[0]?.title ? pricing.items[0].title.slice(0, 35) : 'Exam Study Guide'}`,
       order_tags: {
         product_count: String(pricing.items.length),
         delivery_option: cleanShipping.deliveryOption,

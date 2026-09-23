@@ -15,27 +15,37 @@ export const XylemLogo: React.FC<XylemLogoProps> = ({
 }) => {
   const navyColor = light ? '#ffffff' : '#0a2540';
   const greenColor = light ? '#34d399' : '#00875a';
-  const subtextColor = light ? '#94a3b8' : '#0a2540';
+  const subtextColor = light ? '#cbd5e1' : '#0a2540';
 
-  const dimensions = {
-    sm: { width: 140, height: 38 },
-    md: { width: 175, height: 48 },
-    lg: { width: 230, height: 62 },
-    xl: { width: 300, height: 82 },
-  }[size];
+  const dimensions = showTagline
+    ? {
+        sm: { width: 125, height: 53 },
+        md: { width: 160, height: 68 },
+        lg: { width: 215, height: 91 },
+        xl: { width: 275, height: 117 },
+      }[size]
+    : {
+        sm: { width: 125, height: 43 },
+        md: { width: 160, height: 55 },
+        lg: { width: 215, height: 74 },
+        xl: { width: 275, height: 95 },
+      }[size];
+
+  const viewBox = showTagline ? '0 0 224 94' : '0 0 224 76';
 
   return (
     <div className={`inline-flex flex-col items-center justify-center select-none ${className}`}>
       <svg
         width={dimensions.width}
         height={dimensions.height}
-        viewBox="0 0 260 70"
+        viewBox={viewBox}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="overflow-visible"
+        aria-label="XYLEM BOOKSTORE"
       >
-        {/* The X glyph */}
-        <g id="x-glyph">
+        {/* The X glyph with leaf */}
+        <g id="x-glyph" transform="translate(1, 6) scale(1.29)">
           {/* Bottom-left arm in emerald green */}
           <path
             d="M8 52L26 27L12 6H29L38 21L24 52H8Z"
@@ -57,9 +67,9 @@ export const XylemLogo: React.FC<XylemLogoProps> = ({
           <path
             d="M27 27C34 22 42 16 50 5"
             stroke="#ffffff"
-            strokeWidth="1.6"
+            strokeWidth="1.8"
             strokeLinecap="round"
-            opacity="0.9"
+            opacity="0.95"
           />
 
           {/* Bottom-right diagonal in navy */}
@@ -69,54 +79,52 @@ export const XylemLogo: React.FC<XylemLogoProps> = ({
           />
         </g>
 
-        {/* XYLEM letters in Navy */}
-        <g id="xylem-text" fill={navyColor} fontWeight="900" fontFamily="'Plus Jakarta Sans', sans-serif">
-          {/* Y */}
-          <path
-            d="M58 6H72L81 26L90 6H104L88 34V52H74V34L58 6Z"
-          />
-          {/* L */}
-          <path
-            d="M109 6H123V41H147V52H109V6Z"
-          />
-          {/* E */}
-          <path
-            d="M153 6H191V17H167V24H187V34H167V41H192V52H153V6Z"
-          />
-          {/* M */}
-          <path
-            d="M198 6H215L227 33L239 6H256V52H243V23L232 46H222L211 23V52H198V6Z"
-          />
-        </g>
-
-        {/* LEARNING in Emerald Green */}
+        {/* Row 1: XYLEM in Bold Navy */}
         <text
-          x="134"
-          y="66"
-          textAnchor="middle"
-          fill={greenColor}
-          fontFamily="'Plus Jakarta Sans', sans-serif"
-          fontWeight="800"
-          fontSize="13"
-          letterSpacing="5.5"
+          x="73"
+          y="40"
+          fill={navyColor}
+          fontFamily="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+          fontWeight="900"
+          fontSize="31"
+          letterSpacing="0.5"
+          textLength="138"
+          lengthAdjust="spacingAndGlyphs"
         >
-          LEARNING
+          XYLEM
         </text>
-      </svg>
 
-      {/* Tagline: LEARN • PRACTICE • ACHIEVE */}
-      {showTagline && (
-        <div
-          className={`text-[9px] sm:text-[10px] tracking-[0.28em] font-semibold mt-0.5 uppercase transition-colors`}
-          style={{ color: subtextColor }}
+        {/* Row 2: BOOKSTORE in Bold Emerald Green */}
+        <text
+          x="73"
+          y="70"
+          fill={greenColor}
+          fontFamily="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+          fontWeight="900"
+          fontSize="22"
+          letterSpacing="2.0"
+          textLength="138"
+          lengthAdjust="spacingAndGlyphs"
         >
-          <span>LEARN</span>
-          <span className="mx-2 text-emerald-600 font-bold">•</span>
-          <span>PRACTICE</span>
-          <span className="mx-2 text-emerald-600 font-bold">•</span>
-          <span>ACHIEVE</span>
-        </div>
-      )}
+          BOOKSTORE
+        </text>
+
+        {/* Row 3: LEARN • PRACTICE • ACHIEVE */}
+        {showTagline && (
+          <text
+            x="130"
+            y="90"
+            textAnchor="middle"
+            fill={subtextColor}
+            fontFamily="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+            fontWeight="700"
+            fontSize="9"
+            letterSpacing="2.2"
+          >
+            LEARN  •  PRACTICE  •  ACHIEVE
+          </text>
+        )}
+      </svg>
     </div>
   );
 };

@@ -796,11 +796,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const content = `%PDF-1.4
 %
 1 0 obj
-<< /Title (${book.title} - Xylem Learning Official Exam Guide)
-   /Author (Xylem Learning Academic Editorial Board)
+<< /Title (${book.title} - Xylem Bookstore Official Exam Guide)
+   /Author (Xylem Bookstore Academic Editorial Board)
    /Subject (${book.category} Exam Preparation)
    /Keywords (IELTS, OET, PTE, German, Mock Test, Study Guide)
-   /Creator (Xylem Learning Publishing Engine)
+   /Creator (Xylem Bookstore Publishing Engine)
 >>
 endobj
 2 0 obj
@@ -818,7 +818,7 @@ stream
 BT
 /F1 24 Tf
 50 750 Td
-(XYLEM LEARNING) Tj
+(XYLEM BOOKSTORE) Tj
 /F1 16 Tf
 0 -40 Td
 (${book.title}) Tj
@@ -848,7 +848,7 @@ startxref
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${titleClean}_XylemLearning.pdf`;
+    link.download = `${titleClean}_XylemBookstore.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

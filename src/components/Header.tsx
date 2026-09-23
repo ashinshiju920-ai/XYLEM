@@ -167,7 +167,7 @@ export const Header: React.FC = () => {
                     <div className="border-t border-slate-100 my-1" />
 
                     <div className="px-4 py-2 text-[11px] text-slate-400">
-                      Xylem Learning Digital Store v2.5
+                      Xylem Bookstore v2.5
                     </div>
                   </div>
                 </>

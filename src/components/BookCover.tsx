@@ -192,7 +192,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
                     isLightCover ? 'text-slate-700' : 'text-slate-200'
                   }`}
                 >
-                  XYLEM LEARNING
+                  XYLEM BOOKSTORE
                 </span>
               </div>
               <div

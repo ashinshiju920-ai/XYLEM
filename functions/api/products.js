@@ -96,7 +96,7 @@ function sanitizeProduct(raw) {
     badgeColor: sanitizeString(raw.badgeColor, 30),
     rating: Math.max(1, Math.min(5, Number(raw.rating) || 4.8)),
     reviewCount: sanitizeNumber(raw.reviewCount, 0, 1000000, 0),
-    author: sanitizeString(raw.author, 100) || 'Xylem Learning',
+    author: sanitizeString(raw.author, 100) || 'Xylem Bookstore',
     samplePdfName: sanitizeString(raw.samplePdfName, 100) || 'Official_Prep_Guide.pdf',
     pdfUrl: sanitizeString(raw.pdfUrl, 500),
     prices: {

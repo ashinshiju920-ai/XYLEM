@@ -20,7 +20,7 @@ export const AboutView: React.FC = () => {
           Empowering Learners Across Global Milestones
         </h1>
         <p className="text-base text-slate-600 leading-relaxed">
-          Xylem Learning is India's leading specialized academic and test-preparation publishing house, dedicated to helping students and professionals conquer IELTS, OET, PTE, and German language certifications.
+          Xylem Bookstore is India's leading specialized academic and test-preparation publishing house, dedicated to helping students and professionals conquer IELTS, OET, PTE, and German language certifications.
         </p>
       </div>
 
@@ -83,7 +83,7 @@ export const AboutView: React.FC = () => {
           Ready to achieve your target band?
         </h2>
         <p className="text-sm text-slate-300 max-w-xl mx-auto">
-          Explore our complete study guides and start your preparation with Xylem Learning today.
+          Explore our complete study guides and start your preparation with Xylem Bookstore today.
         </p>
         <button
           onClick={() => setCurrentView('catalog')}

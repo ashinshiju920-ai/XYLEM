@@ -1055,7 +1055,7 @@ export const AdminView: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-white tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                    Xylem Learning
+                    Xylem Bookstore
                   </span>
                   <span className="text-[10px] uppercase font-bold tracking-widest bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
                     Admin Portal
