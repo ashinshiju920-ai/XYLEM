@@ -108,6 +108,18 @@ export async function loadCatalogue(env) {
       }
     } catch {}
   }
+
+  const cloudName = env?.CLOUDINARY_CLOUD_NAME;
+  if (cloudName) {
+    try {
+      const response = await fetch(
+        `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json`,
+        { cache: 'no-store' }
+      );
+      const data = response.ok ? await response.json() : null;
+      if (Array.isArray(data?.books) && data.books.length > 0) return data.books;
+    } catch {}
+  }
   return DEFAULT_CATALOG;
 }
 

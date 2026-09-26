@@ -4,6 +4,22 @@
 export const GOOGLE_SHEET_COPY_URL =
   'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/copy';
 
+export async function hashFulfillmentToken(token) {
+  if (!token || typeof token !== 'string') return '';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function hasFulfillmentAccess(order, token) {
+  if (!order?.fulfillment_token_hash || !token) return false;
+  const expected = String(order.fulfillment_token_hash);
+  const actual = await hashFulfillmentToken(token);
+  if (expected.length !== actual.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ actual.charCodeAt(i);
+  return mismatch === 0;
+}
+
 /**
  * Saves a new pending order into Cloudflare D1 and KV.
  */
@@ -20,6 +36,7 @@ export async function saveOrder(env, order) {
     customer_phone: order.customer_phone || order.shipping?.phone || '',
     shipping_json: typeof order.shipping_json === 'string' ? order.shipping_json : JSON.stringify(order.shipping || {}),
     items_json: typeof order.items_json === 'string' ? order.items_json : JSON.stringify(order.items || []),
+    fulfillment_token_hash: order.fulfillment_token_hash || '',
     created_at: order.created_at || now,
     updated_at: order.updated_at || now,
   };
@@ -31,8 +48,8 @@ export async function saveOrder(env, order) {
         `INSERT INTO orders (
           id, cf_order_id, amount_paise, currency, status,
           customer_name, customer_email, customer_phone,
-          shipping_json, items_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          shipping_json, items_json, fulfillment_token_hash, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           orderRecord.id,
@@ -45,6 +62,7 @@ export async function saveOrder(env, order) {
           orderRecord.customer_phone,
           orderRecord.shipping_json,
           orderRecord.items_json,
+          orderRecord.fulfillment_token_hash,
           orderRecord.created_at,
           orderRecord.updated_at
         )
@@ -294,7 +312,7 @@ export function issuePaidFulfillmentLinks(order) {
     downloads: digitalItems.map((item) => ({
       bookId: item.bookId || item.id,
       title: item.title,
-      downloadUrl: `/api/download?order_id=${encodeURIComponent(order.id)}&book_id=${encodeURIComponent(item.bookId || item.id)}`,
+      downloadUrl: `/api/download?order_id=${encodeURIComponent(order.id)}&book_id=${encodeURIComponent(item.bookId || item.id)}&access_token=${encodeURIComponent(order.fulfillmentAccessToken)}`,
     })),
   };
 }

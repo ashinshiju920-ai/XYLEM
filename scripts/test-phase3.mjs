@@ -3,7 +3,7 @@
 
 import assert from 'node:assert';
 import { computeOrderPrice, validateShippingInfo } from '../functions/utils/pricing.js';
-import { saveOrder, getOrder, updateOrderStatus, issuePaidFulfillmentLinks } from '../functions/utils/db.js';
+import { saveOrder, getOrder, hashFulfillmentToken } from '../functions/utils/db.js';
 import { onRequestPost as handleCreateOrder } from '../functions/api/create-cashfree-order.js';
 import { onRequestPost as handleWebhook } from '../functions/api/cashfree-webhook.js';
 import { onRequestGet as handleOrderStatus } from '../functions/api/order-status.js';
@@ -101,6 +101,7 @@ async function runTests() {
   // TEST 4: D1 / KV Order Persistence
   console.log('Test 4: Order Persistence & Retrieval');
   const testOrderId = `order_${Date.now()}_test`;
+  const accessToken = 'a'.repeat(64);
   await saveOrder(mockEnv, {
     id: testOrderId,
     cf_order_id: testOrderId,
@@ -111,6 +112,7 @@ async function runTests() {
     customer_email: 'ashin@example.com',
     shipping: validShipping.clean,
     items: [{ bookId: 'ielts-full-prep', title: 'IELTS Full Prep', format: 'digital', quantity: 1 }],
+    fulfillment_token_hash: await hashFulfillmentToken(accessToken),
   });
 
   const retrieved = await getOrder(mockEnv, testOrderId);
@@ -121,7 +123,11 @@ async function runTests() {
 
   // TEST 5: Order Status Endpoint before Payment (UNPAID)
   console.log('Test 5: GET /api/order-status on PENDING order');
-  const statusReqUnpaid = new Request(`https://portal.xylemlearning.online/api/order-status?order_id=${testOrderId}`);
+  const unauthorizedStatusReq = new Request(`https://portal.xylemlearning.online/api/order-status?order_id=${testOrderId}`);
+  const unauthorizedStatusRes = await handleOrderStatus({ request: unauthorizedStatusReq, env: mockEnv });
+  assert.strictEqual(unauthorizedStatusRes.status, 403, 'Order status must require the per-order access token');
+
+  const statusReqUnpaid = new Request(`https://portal.xylemlearning.online/api/order-status?order_id=${testOrderId}&access_token=${accessToken}`);
   const statusResUnpaid = await handleOrderStatus({ request: statusReqUnpaid, env: mockEnv });
   assert.strictEqual(statusResUnpaid.status, 200);
   const statusJsonUnpaid = await statusResUnpaid.json();
@@ -131,7 +137,7 @@ async function runTests() {
 
   // TEST 6: Protected Download Gate on Unpaid Order (Must return 403)
   console.log('Test 6: Protected Download Gate on PENDING order (HTTP 403 expected)');
-  const dlReqUnpaid = new Request(`https://portal.xylemlearning.online/api/download?order_id=${testOrderId}&book_id=ielts-full-prep`);
+  const dlReqUnpaid = new Request(`https://portal.xylemlearning.online/api/download?order_id=${testOrderId}&book_id=ielts-full-prep&access_token=${accessToken}`);
   const dlResUnpaid = await handleDownload({ request: dlReqUnpaid, env: mockEnv });
   assert.strictEqual(dlResUnpaid.status, 403, 'Must return 403 Forbidden for unpaid download attempt');
   console.log('  PASS: Unpaid download blocked with HTTP 403\n');
@@ -204,7 +210,7 @@ async function runTests() {
 
   // TEST 8: Order Status Endpoint on Confirmed PAID Order
   console.log('Test 8: GET /api/order-status on PAID order unlocks fulfillment');
-  const statusReqPaid = new Request(`https://portal.xylemlearning.online/api/order-status?order_id=${testOrderId}`);
+  const statusReqPaid = new Request(`https://portal.xylemlearning.online/api/order-status?order_id=${testOrderId}&access_token=${accessToken}`);
   const statusResPaid = await handleOrderStatus({ request: statusReqPaid, env: mockEnv });
   assert.strictEqual(statusResPaid.status, 200);
   const statusJsonPaid = await statusResPaid.json();
@@ -216,7 +222,7 @@ async function runTests() {
 
   // TEST 9: Protected Download Gate on Confirmed PAID Order
   console.log('Test 9: Protected Download Gate on PAID order (HTTP 200 expected)');
-  const dlReqPaid = new Request(`https://portal.xylemlearning.online/api/download?order_id=${testOrderId}&book_id=ielts-full-prep`);
+  const dlReqPaid = new Request(`https://portal.xylemlearning.online/api/download?order_id=${testOrderId}&book_id=ielts-full-prep&access_token=${accessToken}`);
   const dlResPaid = await handleDownload({ request: dlReqPaid, env: mockEnv });
   assert.strictEqual(dlResPaid.status, 200);
   const dlContent = await dlResPaid.text();

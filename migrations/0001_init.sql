@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_phone TEXT,
   shipping_json TEXT,
   items_json TEXT,
+  fulfillment_token_hash TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

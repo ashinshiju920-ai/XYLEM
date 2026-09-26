@@ -235,9 +235,11 @@ export async function onRequestPost(context) {
     const cloudName = env?.CLOUDINARY_CLOUD_NAME;
     const apiKey = env?.CLOUDINARY_API_KEY;
     const apiSecret = env?.CLOUDINARY_API_SECRET;
+    const hasKv = Boolean(env?.PRODUCTS_KV);
+    const hasCloudinary = Boolean(cloudName && apiKey && apiSecret);
 
-    if (!cloudName || !apiKey || !apiSecret) {
-      console.error('Cloudinary credentials missing in environment');
+    if (!hasKv && !hasCloudinary) {
+      console.error('No catalog storage provider is configured');
       return new Response(
         JSON.stringify({ error: 'Catalog storage configuration is unavailable.' }),
         {
@@ -253,7 +255,7 @@ export async function onRequestPost(context) {
         currentCatalog = await env.PRODUCTS_KV.get('xylem_products', { type: 'json' });
       } catch {}
     }
-    if (!currentCatalog) {
+    if (!currentCatalog && cloudName) {
       try {
         const cRes = await fetch(
           `https://res.cloudinary.com/${cloudName}/raw/upload/xylem_products_live.json?_t=${Date.now()}`,
@@ -329,7 +331,8 @@ export async function onRequestPost(context) {
         }))
       : undefined;
 
-    const timestamp = Math.round(Date.now() / 1000);
+    // Millisecond version prevents two edits in the same second from being lost by clients.
+    const timestamp = Date.now();
     const updatedCatalog = {
       version: timestamp,
       updatedAt: new Date().toISOString(),
@@ -345,7 +348,11 @@ export async function onRequestPost(context) {
       await env.PRODUCTS_KV.put('xylem_products_version', String(timestamp));
     }
 
-    // 5. Save to Cloudinary raw storage with instant CDN cache purge
+    // 5. Save to Cloudinary raw storage with instant CDN cache purge when configured.
+    // KV remains the authoritative store, so a catalog edit is not rejected solely because
+    // an optional backup provider is unavailable.
+    let cloudinaryUrl = null;
+    if (hasCloudinary) {
     const publicId = 'xylem_products_live';
     const paramsToSign = `invalidate=true&overwrite=true&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
 
@@ -374,10 +381,15 @@ export async function onRequestPost(context) {
 
     if (!cRes.ok) {
       console.error('Cloudinary save error:', cResult);
-      return new Response(JSON.stringify({ error: 'Catalog storage update failed.' }), {
-        status: 500,
-        headers: responseHeaders,
-      });
+      if (!hasKv) {
+        return new Response(JSON.stringify({ error: 'Catalog storage update failed.' }), {
+          status: 500,
+          headers: responseHeaders,
+        });
+      }
+    } else {
+      cloudinaryUrl = cResult.secure_url;
+    }
     }
 
     return new Response(
@@ -386,7 +398,7 @@ export async function onRequestPost(context) {
         version: timestamp,
         updatedAt: updatedCatalog.updatedAt,
         count: updatedCatalog.count,
-        cloudinaryUrl: cResult.secure_url,
+        ...(cloudinaryUrl ? { cloudinaryUrl } : {}),
         books: updatedCatalog.books,
       }),
       {

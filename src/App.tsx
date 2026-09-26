@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -13,15 +13,15 @@ import { PdfViewerModal } from './components/PdfViewerModal';
 import { ContactModal } from './components/ContactModal';
 
 // Views
-import { HomeView } from './views/HomeView';
-import { CatalogView } from './views/CatalogView';
-import { ProductDetailView } from './views/ProductDetailView';
-import { CartView } from './views/CartView';
-import { CheckoutView } from './views/CheckoutView';
-import { OrderSuccessView } from './views/OrderSuccessView';
-import { OrdersHistoryView } from './views/OrdersHistoryView';
-import { AboutView } from './views/AboutView';
-import { AdminView } from './views/AdminView';
+const HomeView = lazy(() => import('./views/HomeView').then((module) => ({ default: module.HomeView })));
+const CatalogView = lazy(() => import('./views/CatalogView').then((module) => ({ default: module.CatalogView })));
+const ProductDetailView = lazy(() => import('./views/ProductDetailView').then((module) => ({ default: module.ProductDetailView })));
+const CartView = lazy(() => import('./views/CartView').then((module) => ({ default: module.CartView })));
+const CheckoutView = lazy(() => import('./views/CheckoutView').then((module) => ({ default: module.CheckoutView })));
+const OrderSuccessView = lazy(() => import('./views/OrderSuccessView').then((module) => ({ default: module.OrderSuccessView })));
+const OrdersHistoryView = lazy(() => import('./views/OrdersHistoryView').then((module) => ({ default: module.OrdersHistoryView })));
+const AboutView = lazy(() => import('./views/AboutView').then((module) => ({ default: module.AboutView })));
+const AdminView = lazy(() => import('./views/AdminView').then((module) => ({ default: module.AdminView })));
 import { checkOrderStatus } from './utils/cashfree';
 import { Order } from './types';
 import { BOOKS } from './data/books';
@@ -42,10 +42,14 @@ const ShopApp: React.FC = () => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('order_id') || params.get('orderId');
+    const accessToken = params.get('access_token') || sessionStorage.getItem(`xylem_order_access:${orderId}`);
     const cfStatus = params.get('cf_status') || params.get('status');
 
     if (orderId) {
-      checkOrderStatus(orderId)
+      if (params.get('access_token')) {
+        sessionStorage.setItem(`xylem_order_access:${orderId}`, params.get('access_token')!);
+      }
+      checkOrderStatus(orderId, accessToken)
         .then((res) => {
           if (res && res.status === 'PAID') {
             clearCart();
@@ -123,6 +127,7 @@ const ShopApp: React.FC = () => {
 
       {/* Main View Router */}
       <main className="flex-1">
+        <Suspense fallback={<div className="min-h-[40vh] grid place-items-center text-sm text-slate-500">Loading…</div>}>
         {currentView === 'home' && <HomeView />}
         {currentView === 'catalog' && <CatalogView />}
         {currentView === 'product' && <ProductDetailView />}
@@ -132,6 +137,7 @@ const ShopApp: React.FC = () => {
         {currentView === 'orders' && <OrdersHistoryView />}
         {currentView === 'about' && <AboutView />}
         {currentView === 'admin' && <AdminView />}
+        </Suspense>
       </main>
 
       {/* Footer */}

@@ -118,14 +118,14 @@ interface ShopContextType {
 }
 
 const defaultShipping: ShippingInfo = {
-  fullName: 'Ashin Shiju',
-  email: 'ashin.shiju@example.com',
-  phone: '9876543210',
-  addressLine1: 'Building 4B, Green Park Avenue',
-  addressLine2: 'Near Metro Station',
-  city: 'Kochi',
-  state: 'Kerala',
-  pinCode: '682016',
+  fullName: '',
+  email: '',
+  phone: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  pinCode: '',
   deliveryOption: 'digital',
   saveAddress: true,
 };
@@ -309,10 +309,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLastCloudSync(new Date());
     });
 
-    // Fast 1.5s real-time check interval
+    // A light version check backs up instant cross-tab updates and focus refreshes.
     const interval = setInterval(() => {
       refreshProductsFromCloud(false);
-    }, 1500);
+    }, 15000);
 
     const onWakeup = () => {
       refreshProductsFromCloud(false);
@@ -341,19 +341,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Cart state initialized with 1 default item (IELTS Full Preparation Digital) matching the mockup!
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const defaultBook = books.find((b) => b.id === 'ielts-full-prep') || books[0] || BOOKS[0];
-    return [
-      {
-        bookId: defaultBook.id,
-        book: defaultBook,
-        format: 'digital',
-        quantity: 1,
-        price: defaultBook.prices.digital.price,
-      },
-    ];
-  });
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [shippingInfo, setShippingInfo] = useState<ShippingInfo>(defaultShipping);

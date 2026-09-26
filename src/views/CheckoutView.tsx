@@ -23,7 +23,6 @@ import { CashfreeLogo } from '../components/CashfreeLogo';
 import {
   createCashfreeOrder,
   loadCashfreeSDK,
-  CASHFREE_PAYMENT_FORM_URL,
 } from '../utils/cashfree';
 
 export const CheckoutView: React.FC = () => {
@@ -79,16 +78,14 @@ export const CheckoutView: React.FC = () => {
 
   // Server-authoritative checkout sending intent only (Rule 3)
   const handleProceedToPayment = async () => {
+    if (cart.length === 0) {
+      showToast('Your cart is empty. Add a study material before checkout.', 'warning');
+      setCurrentView('cart');
+      return;
+    }
     setIsProcessing(true);
     try {
-      const cartPayload = (cart.length > 0 ? cart : [
-        {
-          bookId: activeBook.id,
-          format: activeFormat,
-          quantity: 1,
-          selectedAddonIds: [activeFormat],
-        },
-      ]).map((item: any) => ({
+      const cartPayload = cart.map((item: any) => ({
         bookId: item.bookId || item.book?.id || activeBook.id,
         addonIds: item.selectedAddonIds || [item.format || 'digital'],
         format: item.format || 'digital',
@@ -103,6 +100,7 @@ export const CheckoutView: React.FC = () => {
       });
 
       if (orderData.paymentSessionId) {
+        sessionStorage.setItem(`xylem_order_access:${orderData.orderId}`, orderData.fulfillmentAccessToken);
         const cashfree = await loadCashfreeSDK(
           orderData.environment || (orderData.isProd ? 'production' : 'sandbox')
         );
@@ -115,8 +113,7 @@ export const CheckoutView: React.FC = () => {
         }
       }
 
-      // Fallback if SDK cannot be loaded
-      window.location.href = CASHFREE_PAYMENT_FORM_URL;
+      throw new Error('Secure payment checkout could not be initialized. Please try again.');
     } catch (err: any) {
       console.error('Payment initiation error:', err);
       showToast(err.message || 'Payment initiation failed. Please try again.', 'warning');
@@ -211,7 +208,7 @@ export const CheckoutView: React.FC = () => {
             >
               <ShoppingBag className="w-5 h-5" />
               <span className="absolute -top-0.5 -right-0.5 bg-emerald-700 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white">
-                {cartCount > 0 ? cartCount : 1}
+                {cartCount}
               </span>
             </button>
           </div>

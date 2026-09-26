@@ -43,12 +43,9 @@ export async function saveCatalogToCloud(
   examPaths?: ExamPath[],
   testimonials?: Testimonial[]
 ): Promise<{ success: boolean; version?: number; error?: string }> {
-  const timestamp = Math.round(Date.now() / 1000);
+  const timestamp = Date.now();
 
-  // 1. Instant 0ms broadcast to all open tabs & windows on this machine
-  broadcastLocalUpdate(books, timestamp, examPaths, testimonials);
-
-  // 2. Persist via Cloudflare Pages edge endpoint /api/products
+  // 1. Persist via Cloudflare Pages edge endpoint /api/products
   try {
     const res = await fetch('/api/products', {
       method: 'POST',
@@ -56,20 +53,23 @@ export async function saveCatalogToCloud(
       body: JSON.stringify({ books, examPaths, testimonials }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.success) {
-        return { success: true, version: data.version || timestamp };
-      }
-      return { success: false, error: data?.error || 'Failed to sync catalog' };
+    if (!res.ok) {
+      let errMsg = `Failed to sync catalog (status ${res.status})`;
+      try {
+        const errData = await res.json();
+        if (errData?.error) errMsg = errData.error;
+      } catch {}
+      return { success: false, error: errMsg };
     }
 
-    let errMsg = `Failed to sync catalog (status ${res.status})`;
-    try {
-      const errData = await res.json();
-      if (errData?.error) errMsg = errData.error;
-    } catch {}
-    return { success: false, error: errMsg };
+    const data = await res.json();
+    if (data?.success) {
+      const newVersion = data.version || timestamp;
+      // 2. Broadcast the successful update to all tabs/windows
+      broadcastLocalUpdate(books, newVersion, examPaths, testimonials);
+      return { success: true, version: newVersion };
+    }
+    return { success: false, error: data?.error || 'Failed to sync catalog' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error while syncing catalog' };
   }
@@ -178,6 +178,7 @@ export function broadcastLocalUpdate(
 ) {
   if (typeof window === 'undefined') return;
 
+  // Persist data locally first; ensures any tab that reads from storage gets a consistent snapshot.
   try {
     localStorage.setItem('xylem_books_data', JSON.stringify(books));
     localStorage.setItem('xylem_books_version', String(version));
@@ -187,8 +188,11 @@ export function broadcastLocalUpdate(
     if (testimonials) {
       localStorage.setItem('xylem_testimonials_data', JSON.stringify(testimonials));
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to write sync data to localStorage:', e);
+  }
 
+  // Broadcast across tabs/windows for near‑zero latency updates.
   if ('BroadcastChannel' in window) {
     try {
       const bc = new BroadcastChannel(CHANNEL_NAME);

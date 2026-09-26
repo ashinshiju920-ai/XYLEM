@@ -1,7 +1,7 @@
 // functions/api/order-status.js
 // Server-Side Cashfree Order Verification & Fulfillment Gate
 
-import { getOrder, updateOrderStatus, issuePaidFulfillmentLinks } from '../utils/db.js';
+import { getOrder, updateOrderStatus, issuePaidFulfillmentLinks, hasFulfillmentAccess } from '../utils/db.js';
 import { getCorsHeaders, handleOptions } from '../utils/cors.js';
 
 export async function onRequestOptions(context) {
@@ -15,6 +15,7 @@ export async function onRequestGet(context) {
   try {
     const url = new URL(request.url);
     const orderId = url.searchParams.get('order_id') || url.searchParams.get('orderId');
+    const accessToken = url.searchParams.get('access_token');
 
     if (!orderId || typeof orderId !== 'string') {
       return new Response(
@@ -38,6 +39,13 @@ export async function onRequestGet(context) {
         }),
         { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
       );
+    }
+
+    if (!(await hasFulfillmentAccess(order, accessToken))) {
+      return new Response(JSON.stringify({ error: 'Order access is not authorized.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
     }
 
     // 2. If status is not yet PAID, query Cashfree Get Order API server-side
@@ -80,7 +88,7 @@ export async function onRequestGet(context) {
 
     // 3. Return ONLY verified, non-internal fields
     if (order.status === 'PAID') {
-      const fulfillment = issuePaidFulfillmentLinks(order);
+      const fulfillment = issuePaidFulfillmentLinks({ ...order, fulfillmentAccessToken: accessToken });
       return new Response(
         JSON.stringify({
           status: 'PAID',

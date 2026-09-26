@@ -91,6 +91,7 @@ export async function createCashfreeOrder(params: CheckoutIntentParams): Promise
   orderCurrency?: string;
   environment?: 'sandbox' | 'production';
   isProd?: boolean;
+  fulfillmentAccessToken: string;
 }> {
   // Strip any accidental price or status fields before sending
   const sanitizedIntent = {
@@ -141,6 +142,7 @@ export async function createCashfreeOrder(params: CheckoutIntentParams): Promise
       orderCurrency: data.order_currency || data.orderCurrency || 'INR',
       environment: data.environment || (data.isProd ? 'production' : 'sandbox'),
       isProd: Boolean(data.isProd),
+      fulfillmentAccessToken: data.fulfillmentAccessToken,
     };
   }
 
@@ -174,13 +176,14 @@ export interface OrderStatusResponse {
 /**
  * Calls GET /api/order-status?order_id=... to verify whether the order is confirmed as PAID.
  */
-export async function checkOrderStatus(orderId: string): Promise<OrderStatusResponse> {
+export async function checkOrderStatus(orderId: string, accessToken?: string | null): Promise<OrderStatusResponse> {
   if (!orderId) {
     return { status: 'NOT_FOUND', orderId: '' };
   }
 
   try {
-    const res = await fetch(`/api/order-status?order_id=${encodeURIComponent(orderId)}`);
+    if (!accessToken) return { status: 'NOT_FOUND', orderId, error: 'Order access token is missing.' };
+    const res = await fetch(`/api/order-status?order_id=${encodeURIComponent(orderId)}&access_token=${encodeURIComponent(accessToken)}`);
     if (!res.ok) {
       return { status: 'NOT_FOUND', orderId };
     }

@@ -2,7 +2,7 @@
 // Server-Side Protected Study Material Download Gate
 // Unlocks downloads ONLY for orders verified as PAID in D1 / KV
 
-import { getOrder } from '../utils/db.js';
+import { getOrder, hasFulfillmentAccess } from '../utils/db.js';
 import { loadCatalogue } from '../utils/pricing.js';
 
 export async function onRequestGet(context) {
@@ -11,6 +11,7 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const orderId = url.searchParams.get('order_id');
     const bookId = url.searchParams.get('book_id');
+    const accessToken = url.searchParams.get('access_token');
 
     if (!orderId || !bookId) {
       return new Response('Missing order_id or book_id parameters.', { status: 400 });
@@ -20,6 +21,10 @@ export async function onRequestGet(context) {
     const order = await getOrder(env, orderId);
     if (!order) {
       return new Response('Order not found.', { status: 404 });
+    }
+
+    if (!(await hasFulfillmentAccess(order, accessToken))) {
+      return new Response('Order access is not authorized.', { status: 403 });
     }
 
     if (order.status !== 'PAID') {
@@ -45,15 +50,27 @@ export async function onRequestGet(context) {
     };
 
     if (book.pdfUrl) {
-      return Response.redirect(book.pdfUrl, 302);
+      try {
+        const pdfUrl = new URL(book.pdfUrl);
+        if (pdfUrl.protocol === 'https:') return Response.redirect(pdfUrl.toString(), 302);
+      } catch {}
     }
 
     // Generate authenticated official PDF response
     const titleClean = (book.title || 'Xylem_Bookstore_Material').replace(/[^a-zA-Z0-9]/g, '_');
+    const escapePdfText = (value) => String(value || '').replace(/[\\()\r\n]/g, (char) => {
+      if (char === '\\') return '\\\\';
+      if (char === '(') return '\\(';
+      if (char === ')') return '\\)';
+      return ' ';
+    });
+    const pdfTitle = escapePdfText(book.title);
+    const pdfCategory = escapePdfText(book.category || 'Certification');
+    const licensee = escapePdfText(order.customer_email || order.customer_name || 'Verified Student');
     const pdfContent = `%PDF-1.4
 %
 1 0 obj
-<< /Title (${book.title} - Xylem Bookstore Official Exam Guide)
+<< /Title (${pdfTitle} - Xylem Bookstore Official Exam Guide)
    /Author (Xylem Bookstore Academic Editorial Board)
    /Subject (${book.category || 'Exam'} Preparation)
    /Keywords (IELTS, OET, PTE, German, Mock Test, Study Guide)
@@ -78,12 +95,14 @@ BT
 (XYLEM BOOKSTORE OFFICIAL MATERIAL) Tj
 /F1 16 Tf
 0 -40 Td
-(${book.title}) Tj
+(${pdfTitle}) Tj
 /F1 12 Tf
 0 -30 Td
-(Licensed to: ${order.customer_email || order.customer_name || 'Verified Student'}) Tj
+(Licensed to: ${licensee}) Tj
 0 -20 Td
-(Category: ${book.category || 'Certification'} | Edition 2026) Tj
+(Category: ${pdfCategory} | Edition 2026) Tj
+0 -20 Td
+(Status: VERIFIED PAID) Tj
 0 -20 Td
 (Security Identifier: ${order.id}) Tj
 ET

@@ -3,7 +3,7 @@
 // Hardened with strict CORS, KV rate limiting, and sanitized error responses
 
 import { computeOrderPrice, validateShippingInfo } from '../utils/pricing.js';
-import { saveOrder } from '../utils/db.js';
+import { hashFulfillmentToken, saveOrder } from '../utils/db.js';
 import { getCorsHeaders, handleOptions } from '../utils/cors.js';
 import { checkRateLimit } from '../utils/rateLimit.js';
 
@@ -14,25 +14,10 @@ export async function onRequestOptions(context) {
 export async function onRequestGet(context) {
   const { request, env } = context;
   const corsHeaders = getCorsHeaders(request, env);
-  const secretKey = env && env.CASHFREE_SECRET_KEY ? String(env.CASHFREE_SECRET_KEY).trim() : '';
-  const appId = env && env.CASHFREE_APP_ID ? String(env.CASHFREE_APP_ID).trim() : '';
-  const configuredEnv = env && env.CASHFREE_ENV ? String(env.CASHFREE_ENV).trim().toUpperCase() : '';
-
-  const isProd = secretKey.startsWith('cfsk_ma_prod_') || configuredEnv === 'PRODUCTION';
-
-  return new Response(
-    JSON.stringify({
-      status: 'active',
-      endpoint: '/api/create-cashfree-order',
-      mode: isProd ? 'production' : 'sandbox',
-      hasSecretKey: Boolean(secretKey),
-      hasAppId: Boolean(appId),
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    }
-  );
+  return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+    status: 405,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  });
 }
 
 export async function onRequest(context) {
@@ -197,9 +182,13 @@ export async function onRequestPost(context) {
       : 'https://sandbox.cashfree.com/pg/orders');
 
     // Generate unique order ID
-    const timestamp = Math.round(Date.now() / 1000);
-    const orderId = `order_${timestamp}_${Math.floor(1000 + Math.random() * 9000)}`;
-    const customerId = `cust_${cleanShipping.phone}_${timestamp % 10000}`;
+    const timestamp = Date.now();
+    const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+    const randomId = Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const fulfillmentTokenBytes = crypto.getRandomValues(new Uint8Array(32));
+    const fulfillmentAccessToken = Array.from(fulfillmentTokenBytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const orderId = `order_${timestamp}_${randomId}`;
+    const customerId = `cust_${randomId.slice(0, 24)}`;
 
     // 4. Write PENDING order row to D1 / KV BEFORE calling Cashfree
     await saveOrder(env, {
@@ -213,11 +202,12 @@ export async function onRequestPost(context) {
       customer_phone: cleanShipping.phone,
       shipping: cleanShipping,
       items: pricing.items,
+      fulfillment_token_hash: await hashFulfillmentToken(fulfillmentAccessToken),
     });
 
-    // Build return URL
-    // Redirect to Cashfree payment form after checkout
-    const returnUrl = `https://payments.cashfree.com/forms/study-portal-buy?order_id=${orderId}&cf_status={order_status}&form_code=study-portal-buy&cif_gorm_id=314009172`;
+    // Return to this storefront. The opaque token authorizes only this order's status/downloads.
+    const storefrontUrl = new URL(request.url).origin;
+    const returnUrl = `${storefrontUrl}/?order_id=${encodeURIComponent(orderId)}&access_token=${fulfillmentAccessToken}&cf_status={order_status}`;
 
 
     const cashfreePayload = {
@@ -278,6 +268,7 @@ export async function onRequestPost(context) {
         orderCurrency: 'INR',
         environment: isProd ? 'production' : 'sandbox',
         isProd,
+        fulfillmentAccessToken,
       }),
       {
         status: 200,
